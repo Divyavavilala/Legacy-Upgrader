@@ -112,6 +112,31 @@ export class ScansService {
     return scan;
   }
 
+  async getAiReport(scanId: string, organizationId: string) {
+    await this.findByIdForOrg(scanId, organizationId);
+
+    const report = await this.prisma.modernizationReport.findUnique({
+      where: { scanId },
+    });
+
+    if (!report) {
+      throw new NotFoundException('AI modernization report not found for this scan');
+    }
+
+    const insights = await this.prisma.aiInsight.findMany({
+      where: { scanId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const tokenUsage = await this.prisma.aiTokenUsage.findMany({
+      where: { scanId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return { report, insights, tokenUsage };
+  }
+
   async getProgress(scanId: string, organizationId: string): Promise<ScanProgressResponse> {
     const scan = await this.prisma.scan.findFirst({
       where: {

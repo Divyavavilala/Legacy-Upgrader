@@ -7,7 +7,9 @@ export {
   type QueueWorkerOptions,
 } from './options.js';
 export type {
+  AiArchitectureAnalysisJobPayload,
   AiModernizationJobPayload,
+  AiSecurityReviewJobPayload,
   DependencyAnalysisJobPayload,
   OrganizationScopedJobPayload,
   QueueJobPayloadMap,

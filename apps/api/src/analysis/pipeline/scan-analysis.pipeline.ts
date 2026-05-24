@@ -8,6 +8,7 @@ import { DependencyAnalyzer } from '../dependency/dependency-analyzer.service';
 import { FrameworkAnalyzer } from '../framework/framework-analyzer.service';
 import { GitAnalyzer } from '../git/git-analyzer.service';
 import { RecommendationEngine } from '../recommendation/recommendation-engine.service';
+import type { RepositoryAnalysisSnapshot } from '../types/repository-snapshot.types';
 import type { ScanAnalysisContext } from '../types/scan-analysis.types';
 import { WorkspaceManagerService } from '../workspace/workspace-manager.service';
 import { ScanProgressService } from './scan-progress.service';
@@ -82,12 +83,54 @@ export class ScanAnalysisPipeline {
   }
 
   private async persistResults(context: ScanAnalysisContext): Promise<void> {
-    if (context.commitSha) {
-      await this.prisma.scan.update({
-        where: { id: context.scanId },
-        data: { commitSha: context.commitSha },
-      });
+    const analysisSnapshot: RepositoryAnalysisSnapshot = {
+      technologies: context.technologies,
+      repositoryName: '',
+      repositorySlug: '',
+      findingsSummary: context.findings.map((f) => ({
+        severity: f.severity,
+        category: f.category,
+        title: f.title,
+        ruleId: f.ruleId,
+      })),
+      dependencyIssuesSummary: context.dependencyIssues.map((d) => ({
+        packageName: d.packageName,
+        severity: d.severity,
+        currentVersion: d.currentVersion,
+      })),
+      recommendationsSummary: context.recommendations.map((r) => ({
+        title: r.title,
+        priority: r.priority,
+      })),
+      packageManifests: context.packageJsonFiles.map((p) => ({
+        path: p.filePath,
+        dependencies: p.dependencies,
+        devDependencies: p.devDependencies,
+      })),
+      configHighlights: {},
+    };
+
+    const repository = await this.prisma.repository.findUnique({
+      where: { id: context.repositoryId },
+      select: { name: true, slug: true },
+    });
+
+    if (repository) {
+      analysisSnapshot.repositoryName = repository.name;
+      analysisSnapshot.repositorySlug = repository.slug;
     }
+
+    await this.prisma.scan.update({
+      where: { id: context.scanId },
+      data: {
+        commitSha: context.commitSha ?? undefined,
+        metadata: {
+          technologies: context.technologies,
+          analysisSnapshot,
+          engine: 'legacy-analyzer-v1',
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
 
     if (context.findings.length > 0) {
       await this.prisma.finding.createMany({

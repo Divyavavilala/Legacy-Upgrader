@@ -10,7 +10,9 @@ import { ModuleRef } from '@nestjs/core';
 import {
   ALL_QUEUE_NAMES,
   QUEUE_DEFAULT_JOB_OPTIONS,
+  type AiArchitectureAnalysisJobPayload,
   type AiModernizationJobPayload,
+  type AiSecurityReviewJobPayload,
   type DependencyAnalysisJobPayload,
   type QueueJobPayloadMap,
   type QueueName,
@@ -65,6 +67,20 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     options?: JobsOptions,
   ): Promise<string> {
     return this.enqueue(QUEUE_NAMES.AI_MODERNIZATION, payload, options);
+  }
+
+  async enqueueAiSecurityReview(
+    payload: AiSecurityReviewJobPayload,
+    options?: JobsOptions,
+  ): Promise<string> {
+    return this.enqueue(QUEUE_NAMES.AI_SECURITY_REVIEW, payload, options);
+  }
+
+  async enqueueAiArchitectureAnalysis(
+    payload: AiArchitectureAnalysisJobPayload,
+    options?: JobsOptions,
+  ): Promise<string> {
+    return this.enqueue(QUEUE_NAMES.AI_ARCHITECTURE_ANALYSIS, payload, options);
   }
 
   async enqueueReportGeneration(

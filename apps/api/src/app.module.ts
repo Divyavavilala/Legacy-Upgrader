@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth';
 import { validateEnv } from './config/env.validation';
+import { AiModule } from './ai/ai.module';
 import { OrganizationsModule } from './organizations';
 import { PrismaModule } from './prisma';
 import { QueueModule } from './queue';
@@ -25,6 +26,7 @@ import { WorkersModule } from './workers';
     OrganizationsModule,
     RepositoriesModule,
     ScansModule,
+    AiModule,
     QueueModule,
     WorkersModule,
   ],

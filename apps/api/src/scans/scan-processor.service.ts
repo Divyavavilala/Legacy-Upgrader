@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { RepositoryScanJobPayload } from '@legacyupgrader/queue-constants';
+import { AiOrchestrationService } from '../ai/services/ai-orchestration.service';
 import { ScanAnalysisPipeline } from '../analysis/pipeline/scan-analysis.pipeline';
 import { ScanProgressService } from '../analysis/pipeline/scan-progress.service';
 import { ScanCancelledError, ScanTimeoutError } from '../analysis/types/scan-analysis.types';
@@ -11,14 +12,17 @@ import type { EnvConfig } from '../config/env.validation';
 export class ScanProcessorService {
   private readonly logger = new Logger(ScanProcessorService.name);
   private readonly totalTimeoutMs: number;
+  private readonly aiAutoRun: boolean;
 
   constructor(
     private readonly pipeline: ScanAnalysisPipeline,
     private readonly workspaceManager: WorkspaceManagerService,
     private readonly progressService: ScanProgressService,
+    private readonly aiOrchestration: AiOrchestrationService,
     config: ConfigService<EnvConfig, true>,
   ) {
     this.totalTimeoutMs = config.get('SCAN_TOTAL_TIMEOUT_MS', { infer: true });
+    this.aiAutoRun = config.get('AI_AUTO_RUN_AFTER_SCAN', { infer: true });
   }
 
   async processRepositoryScan(payload: RepositoryScanJobPayload): Promise<void> {
@@ -48,6 +52,14 @@ export class ScanProcessorService {
       this.logger.log(
         `Scan ${payload.scanId} completed in ${durationMs}ms — ${context.findings.length} findings, ${context.recommendations.length} recommendations`,
       );
+
+      if (this.aiAutoRun) {
+        await this.aiOrchestration.scheduleAfterScan({
+          scanId: payload.scanId,
+          repositoryId: payload.repositoryId,
+          organizationId: payload.organizationId,
+        });
+      }
     } catch (error) {
       if (error instanceof ScanCancelledError) {
         this.logger.warn(`Scan ${payload.scanId} cancelled`);

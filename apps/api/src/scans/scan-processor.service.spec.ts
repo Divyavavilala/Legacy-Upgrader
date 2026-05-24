@@ -3,6 +3,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { ScanAnalysisPipeline } from '../analysis/pipeline/scan-analysis.pipeline';
 import { ScanProgressService } from '../analysis/pipeline/scan-progress.service';
 import { WorkspaceManagerService } from '../analysis/workspace/workspace-manager.service';
+import { AiOrchestrationService } from '../ai/services/ai-orchestration.service';
 import { ScanProcessorService } from './scan-processor.service';
 
 describe('ScanProcessorService', () => {
@@ -46,9 +47,16 @@ describe('ScanProcessorService', () => {
         { provide: WorkspaceManagerService, useValue: workspaceManager },
         { provide: ScanProgressService, useValue: progressService },
         {
+          provide: AiOrchestrationService,
+          useValue: { scheduleAfterScan: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockReturnValue(600_000),
+            get: jest.fn((key: string) => {
+              if (key === 'AI_AUTO_RUN_AFTER_SCAN') return true;
+              return 600_000;
+            }),
           },
         },
       ],

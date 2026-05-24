@@ -13,9 +13,12 @@ describe('Repositories & Scans (e2e)', () => {
 
   const mockQueueService = {
     enqueueRepositoryScan: jest.fn().mockResolvedValue('mock-job-id'),
+    enqueueAiModernization: jest.fn().mockResolvedValue('mock-ai-job'),
     enqueueDependencyAnalysis: jest.fn(),
     enqueueAiModernization: jest.fn(),
     enqueueReportGeneration: jest.fn(),
+    enqueueAiSecurityReview: jest.fn(),
+    enqueueAiArchitectureAnalysis: jest.fn(),
     getDashboardHealth: jest.fn(),
     onModuleInit: jest.fn(),
     onApplicationShutdown: jest.fn(),

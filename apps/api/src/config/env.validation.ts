@@ -19,6 +19,23 @@ export interface EnvConfig {
   SCAN_TOTAL_TIMEOUT_MS: number;
   SCAN_CLONE_DEPTH: number;
   SCAN_CLONE_MAX_RETRIES: number;
+  AI_ENABLED: boolean;
+  AI_AUTO_RUN_AFTER_SCAN: boolean;
+  AI_DEFAULT_PROVIDER: 'openai' | 'claude' | 'gemini' | 'groq' | 'heuristic';
+  AI_FALLBACK_PROVIDER: 'openai' | 'claude' | 'gemini' | 'groq' | 'heuristic';
+  AI_MAX_TOKENS_PER_REQUEST: number;
+  AI_MAX_CONTEXT_CHARS: number;
+  AI_RATE_LIMIT_PER_MINUTE: number;
+  AI_CACHE_TTL_SECONDS: number;
+  OPENAI_API_KEY?: string;
+  OPENAI_MODEL: string;
+  OPENAI_BASE_URL: string;
+  ANTHROPIC_API_KEY?: string;
+  ANTHROPIC_MODEL: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL: string;
+  GROQ_API_KEY?: string;
+  GROQ_MODEL: string;
 }
 
 function readString(config: Record<string, unknown>, key: string): string {
@@ -38,6 +55,32 @@ function readOptionalString(config: Record<string, unknown>, key: string): strin
     throw new Error(`Invalid ${key}: must be a string`);
   }
   return value;
+}
+
+function readBool(config: Record<string, unknown>, key: string, fallback: boolean): boolean {
+  const raw = config[key];
+  if (raw === undefined || raw === null || raw === '') {
+    return fallback;
+  }
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'string') {
+    return raw.toLowerCase() === 'true' || raw === '1';
+  }
+  return fallback;
+}
+
+const AI_PROVIDERS = ['openai', 'claude', 'gemini', 'groq', 'heuristic'] as const;
+
+function readAiProvider(
+  config: Record<string, unknown>,
+  key: string,
+  fallback: (typeof AI_PROVIDERS)[number],
+): (typeof AI_PROVIDERS)[number] {
+  const raw = config[key] ?? fallback;
+  if (typeof raw !== 'string' || !AI_PROVIDERS.includes(raw as (typeof AI_PROVIDERS)[number])) {
+    throw new Error(`Invalid ${key}: must be one of ${AI_PROVIDERS.join(', ')}`);
+  }
+  return raw as (typeof AI_PROVIDERS)[number];
 }
 
 function readInt(config: Record<string, unknown>, key: string, fallback: number): number {
@@ -104,5 +147,23 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     SCAN_TOTAL_TIMEOUT_MS: scanTotalTimeoutMs,
     SCAN_CLONE_DEPTH: scanCloneDepth,
     SCAN_CLONE_MAX_RETRIES: scanCloneMaxRetries,
+    AI_ENABLED: readBool(config, 'AI_ENABLED', true),
+    AI_AUTO_RUN_AFTER_SCAN: readBool(config, 'AI_AUTO_RUN_AFTER_SCAN', true),
+    AI_DEFAULT_PROVIDER: readAiProvider(config, 'AI_DEFAULT_PROVIDER', 'openai'),
+    AI_FALLBACK_PROVIDER: readAiProvider(config, 'AI_FALLBACK_PROVIDER', 'heuristic'),
+    AI_MAX_TOKENS_PER_REQUEST: readInt(config, 'AI_MAX_TOKENS_PER_REQUEST', 4096),
+    AI_MAX_CONTEXT_CHARS: readInt(config, 'AI_MAX_CONTEXT_CHARS', 32_000),
+    AI_RATE_LIMIT_PER_MINUTE: readInt(config, 'AI_RATE_LIMIT_PER_MINUTE', 30),
+    AI_CACHE_TTL_SECONDS: readInt(config, 'AI_CACHE_TTL_SECONDS', 3600),
+    OPENAI_API_KEY: readOptionalString(config, 'OPENAI_API_KEY'),
+    OPENAI_MODEL: readOptionalString(config, 'OPENAI_MODEL') ?? 'gpt-4o-mini',
+    OPENAI_BASE_URL: readOptionalString(config, 'OPENAI_BASE_URL') ?? 'https://api.openai.com/v1',
+    ANTHROPIC_API_KEY: readOptionalString(config, 'ANTHROPIC_API_KEY'),
+    ANTHROPIC_MODEL:
+      readOptionalString(config, 'ANTHROPIC_MODEL') ?? 'claude-3-5-haiku-20241022',
+    GEMINI_API_KEY: readOptionalString(config, 'GEMINI_API_KEY'),
+    GEMINI_MODEL: readOptionalString(config, 'GEMINI_MODEL') ?? 'gemini-1.5-flash',
+    GROQ_API_KEY: readOptionalString(config, 'GROQ_API_KEY'),
+    GROQ_MODEL: readOptionalString(config, 'GROQ_MODEL') ?? 'llama-3.3-70b-versatile',
   };
 }

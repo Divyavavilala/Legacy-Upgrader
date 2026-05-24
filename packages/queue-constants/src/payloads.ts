@@ -22,6 +22,18 @@ export interface AiModernizationJobPayload extends OrganizationScopedJobPayload 
   reportId?: string;
 }
 
+export interface AiSecurityReviewJobPayload extends OrganizationScopedJobPayload {
+  scanId: string;
+  repositoryId: string;
+  reportId?: string;
+}
+
+export interface AiArchitectureAnalysisJobPayload extends OrganizationScopedJobPayload {
+  scanId: string;
+  repositoryId: string;
+  reportId?: string;
+}
+
 export interface ReportGenerationJobPayload extends OrganizationScopedJobPayload {
   scanId: string;
   repositoryId: string;
@@ -33,5 +45,7 @@ export type QueueJobPayloadMap = {
   'repository-scan': RepositoryScanJobPayload;
   'dependency-analysis': DependencyAnalysisJobPayload;
   'ai-modernization': AiModernizationJobPayload;
+  'ai-security-review': AiSecurityReviewJobPayload;
+  'ai-architecture-analysis': AiArchitectureAnalysisJobPayload;
   'report-generation': ReportGenerationJobPayload;
 };

@@ -127,6 +127,7 @@ model Organization {
   users        User[]
   repositories Repository[]
   queuedJobs   QueuedJob[]
+  aiTokenUsage AiTokenUsage[]
 
   @@map("organizations")
 }
@@ -219,6 +220,8 @@ model Scan {
   migrationRecommendations MigrationRecommendation[]
   modernizationReport      ModernizationReport?
   queuedJobs               QueuedJob[]
+  aiInsights               AiInsight[]
+  aiTokenUsage             AiTokenUsage[]
 
   @@index([repositoryId])
   @@index([repositoryId, status])
@@ -276,6 +279,53 @@ model DependencyIssue {
   @@index([scanId, severity])
   @@index([packageName])
   @@map("dependency_issues")
+}
+
+// -----------------------------------------------------------------------------
+// AI modernization intelligence
+// -----------------------------------------------------------------------------
+
+model AiInsight {
+  id         String   @id @default(cuid())
+  scanId     String   @map("scan_id")
+  agentType  String   @map("agent_type")
+  title      String
+  summary    String?  @db.Text
+  content    Json
+  confidence Float?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([scanId, agentType])
+  @@map("ai_insights")
+}
+
+model AiTokenUsage {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  scanId           String?  @map("scan_id")
+  provider         String
+  model            String
+  agentType        String?  @map("agent_type")
+  promptTokens     Int      @default(0) @map("prompt_tokens")
+  completionTokens Int      @default(0) @map("completion_tokens")
+  totalTokens      Int      @default(0) @map("total_tokens")
+  estimatedCostUsd Decimal? @map("estimated_cost_usd") @db.Decimal(10, 6)
+  cacheHit         Boolean  @default(false) @map("cache_hit")
+  requestHash      String?  @map("request_hash")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scan           Scan?          @relation(fields: [scanId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([scanId])
+  @@index([provider])
+  @@index([createdAt])
+  @@map("ai_token_usage")
 }
 
 // -----------------------------------------------------------------------------

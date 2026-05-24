@@ -35,6 +35,18 @@ export const QUEUE_DEFAULT_JOB_OPTIONS: Record<QueueName, QueueDefaultJobOptions
     removeOnComplete: 200,
     removeOnFail: 500,
   },
+  'ai-security-review': {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 8_000 },
+    removeOnComplete: 200,
+    removeOnFail: 500,
+  },
+  'ai-architecture-analysis': {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 8_000 },
+    removeOnComplete: 200,
+    removeOnFail: 500,
+  },
   'report-generation': {
     attempts: 4,
     backoff: { type: 'exponential', delay: 5_000 },
@@ -47,5 +59,7 @@ export const QUEUE_WORKER_CONCURRENCY: Record<QueueName, QueueWorkerOptions> = {
   'repository-scan': { concurrency: 2 },
   'dependency-analysis': { concurrency: 3 },
   'ai-modernization': { concurrency: 1 },
+  'ai-security-review': { concurrency: 2 },
+  'ai-architecture-analysis': { concurrency: 2 },
   'report-generation': { concurrency: 2 },
 };

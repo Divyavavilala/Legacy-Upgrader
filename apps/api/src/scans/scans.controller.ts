@@ -24,4 +24,11 @@ export class ScansController {
   getProgress(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.scansService.getProgress(id, user.organizationId);
   }
+
+  @Get(':id/ai-report')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, UserRole.VIEWER)
+  @ApiOperation({ summary: 'Get AI modernization report, insights, and token usage' })
+  getAiReport(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.scansService.getAiReport(id, user.organizationId);
+  }
 }
