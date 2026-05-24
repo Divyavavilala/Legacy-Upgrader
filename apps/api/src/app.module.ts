@@ -7,6 +7,8 @@ import { validateEnv } from './config/env.validation';
 import { OrganizationsModule } from './organizations';
 import { PrismaModule } from './prisma';
 import { QueueModule } from './queue';
+import { RepositoriesModule } from './repositories';
+import { ScansModule } from './scans';
 import { UsersModule } from './users';
 import { WorkersModule } from './workers';
 
@@ -21,6 +23,8 @@ import { WorkersModule } from './workers';
     AuthModule,
     UsersModule,
     OrganizationsModule,
+    RepositoriesModule,
+    ScansModule,
     QueueModule,
     WorkersModule,
   ],

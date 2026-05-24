@@ -37,6 +37,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ["apps/api/test/**/*.ts"],
+    ...tseslint.configs.disableTypeChecked,
+  },
+  {
     files: ["apps/web/**/*.{ts,tsx}"],
     languageOptions: {
       globals: globals.browser,

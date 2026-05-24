@@ -201,6 +201,8 @@ model Scan {
   id           String     @id @default(cuid())
   repositoryId String     @map("repository_id")
   status       ScanStatus @default(PENDING)
+  progress     Int        @default(0)
+  currentStage String?    @map("current_stage")
   branch       String?
   commitSha    String?    @map("commit_sha")
   triggeredBy  String?    @map("triggered_by")
