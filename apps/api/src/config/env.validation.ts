@@ -14,6 +14,11 @@ export interface EnvConfig {
   REDIS_PORT: number;
   REDIS_PASSWORD?: string;
   REDIS_DB: number;
+  SCAN_WORKSPACE_ROOT: string;
+  SCAN_CLONE_TIMEOUT_MS: number;
+  SCAN_TOTAL_TIMEOUT_MS: number;
+  SCAN_CLONE_DEPTH: number;
+  SCAN_CLONE_MAX_RETRIES: number;
 }
 
 function readString(config: Record<string, unknown>, key: string): string {
@@ -66,6 +71,18 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     throw new Error('Invalid REDIS_DB: must be between 0 and 15');
   }
 
+  const scanCloneTimeoutMs = readInt(config, 'SCAN_CLONE_TIMEOUT_MS', 300_000);
+  const scanTotalTimeoutMs = readInt(config, 'SCAN_TOTAL_TIMEOUT_MS', 600_000);
+  const scanCloneDepth = readInt(config, 'SCAN_CLONE_DEPTH', 1);
+  const scanCloneMaxRetries = readInt(config, 'SCAN_CLONE_MAX_RETRIES', 2);
+
+  if (scanCloneTimeoutMs < 10_000) {
+    throw new Error('Invalid SCAN_CLONE_TIMEOUT_MS: must be at least 10000');
+  }
+  if (scanTotalTimeoutMs < scanCloneTimeoutMs) {
+    throw new Error('Invalid SCAN_TOTAL_TIMEOUT_MS: must be >= SCAN_CLONE_TIMEOUT_MS');
+  }
+
   return {
     NODE_ENV: readString(config, 'NODE_ENV'),
     APP_NAME: readString(config, 'APP_NAME'),
@@ -82,5 +99,10 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     REDIS_PORT: redisPort,
     REDIS_PASSWORD: readOptionalString(config, 'REDIS_PASSWORD'),
     REDIS_DB: redisDb,
+    SCAN_WORKSPACE_ROOT: readOptionalString(config, 'SCAN_WORKSPACE_ROOT') ?? 'tmp/scans',
+    SCAN_CLONE_TIMEOUT_MS: scanCloneTimeoutMs,
+    SCAN_TOTAL_TIMEOUT_MS: scanTotalTimeoutMs,
+    SCAN_CLONE_DEPTH: scanCloneDepth,
+    SCAN_CLONE_MAX_RETRIES: scanCloneMaxRetries,
   };
 }

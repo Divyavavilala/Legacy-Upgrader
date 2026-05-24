@@ -1,18 +1,15 @@
+import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { ScanStatus } from '@prisma/client';
-import { PrismaService } from '../prisma';
-import { MOCK_FINDING_TEMPLATES } from './data/mock-findings';
+import { ScanAnalysisPipeline } from '../analysis/pipeline/scan-analysis.pipeline';
+import { ScanProgressService } from '../analysis/pipeline/scan-progress.service';
+import { WorkspaceManagerService } from '../analysis/workspace/workspace-manager.service';
 import { ScanProcessorService } from './scan-processor.service';
 
 describe('ScanProcessorService', () => {
   let processor: ScanProcessorService;
-  let prisma: {
-    scan: { update: jest.Mock; findUnique: jest.Mock };
-    finding: { createMany: jest.Mock };
-    repository: { update: jest.Mock };
-    queuedJob: { updateMany: jest.Mock };
-    $transaction: jest.Mock;
-  };
+  let pipeline: { execute: jest.Mock };
+  let workspaceManager: { cleanup: jest.Mock };
+  let progressService: { markCompleted: jest.Mock; markFailed: jest.Mock };
 
   const payload = {
     scanId: 'scan-1',
@@ -21,54 +18,67 @@ describe('ScanProcessorService', () => {
   };
 
   beforeEach(async () => {
-    jest.useFakeTimers();
+    pipeline = {
+      execute: jest.fn().mockResolvedValue({
+        scanId: payload.scanId,
+        repositoryId: payload.repositoryId,
+        organizationId: payload.organizationId,
+        findings: [{ title: 'Outdated React version' }],
+        recommendations: [{ title: 'Migrate React' }],
+        dependencyIssues: [],
+        technologies: ['react', 'nodejs'],
+        startedAt: Date.now(),
+        cloneDurationMs: 1200,
+        commitSha: 'abc123',
+      }),
+    };
 
-    prisma = {
-      scan: {
-        update: jest.fn().mockResolvedValue({}),
-        findUnique: jest.fn().mockResolvedValue({ metadata: { stages: [] } }),
-      },
-      finding: { createMany: jest.fn().mockResolvedValue({ count: 6 }) },
-      repository: { update: jest.fn().mockResolvedValue({}) },
-      queuedJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    workspaceManager = { cleanup: jest.fn().mockResolvedValue(undefined) };
+    progressService = {
+      markCompleted: jest.fn().mockResolvedValue(undefined),
+      markFailed: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ScanProcessorService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        ScanProcessorService,
+        { provide: ScanAnalysisPipeline, useValue: pipeline },
+        { provide: WorkspaceManagerService, useValue: workspaceManager },
+        { provide: ScanProgressService, useValue: progressService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue(600_000),
+          },
+        },
+      ],
     }).compile();
 
     processor = module.get(ScanProcessorService);
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
+  it('runs pipeline, marks completed, and always cleans workspace', async () => {
+    await processor.processRepositoryScan(payload);
+
+    expect(pipeline.execute).toHaveBeenCalledWith(payload);
+    expect(progressService.markCompleted).toHaveBeenCalledWith(
+      payload.scanId,
+      payload.repositoryId,
+      expect.objectContaining({
+        findingsCount: 1,
+        recommendationsCount: 1,
+        technologies: ['react', 'nodejs'],
+      }),
+    );
+    expect(workspaceManager.cleanup).toHaveBeenCalledWith(payload.scanId);
   });
 
-  it('marks scan running, progresses stages, creates findings, and completes', async () => {
-    const processPromise = processor.processRepositoryScan(payload);
+  it('marks failed and still cleans workspace on pipeline error', async () => {
+    pipeline.execute.mockRejectedValue(new Error('clone failed'));
 
-    await jest.runAllTimersAsync();
-    await processPromise;
+    await expect(processor.processRepositoryScan(payload)).rejects.toThrow('clone failed');
 
-    expect(prisma.scan.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: payload.scanId },
-        data: expect.objectContaining({ status: ScanStatus.RUNNING }),
-      }),
-    );
-
-    expect(prisma.finding.createMany).toHaveBeenCalledWith({
-      data: expect.arrayContaining([
-        expect.objectContaining({ title: MOCK_FINDING_TEMPLATES[0].title }),
-      ]),
-    });
-
-    expect(prisma.scan.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: payload.scanId },
-        data: expect.objectContaining({ status: ScanStatus.COMPLETED, progress: 100 }),
-      }),
-    );
+    expect(progressService.markFailed).toHaveBeenCalled();
+    expect(workspaceManager.cleanup).toHaveBeenCalledWith(payload.scanId);
   });
 });

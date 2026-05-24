@@ -1,186 +1,83 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { QueuedJobStatus, ScanStatus } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import type { RepositoryScanJobPayload } from '@legacyupgrader/queue-constants';
-import { PrismaService } from '../prisma';
-import { MOCK_FINDING_TEMPLATES } from './data/mock-findings';
-import {
-  SCAN_STAGE_DELAY_MS,
-  SCAN_STAGE_PROGRESS,
-  SCAN_STAGES,
-  type ScanStage,
-} from './constants/scan-stages';
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+import { ScanAnalysisPipeline } from '../analysis/pipeline/scan-analysis.pipeline';
+import { ScanProgressService } from '../analysis/pipeline/scan-progress.service';
+import { ScanCancelledError, ScanTimeoutError } from '../analysis/types/scan-analysis.types';
+import { WorkspaceManagerService } from '../analysis/workspace/workspace-manager.service';
+import type { EnvConfig } from '../config/env.validation';
 
 @Injectable()
 export class ScanProcessorService {
   private readonly logger = new Logger(ScanProcessorService.name);
+  private readonly totalTimeoutMs: number;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly pipeline: ScanAnalysisPipeline,
+    private readonly workspaceManager: WorkspaceManagerService,
+    private readonly progressService: ScanProgressService,
+    config: ConfigService<EnvConfig, true>,
+  ) {
+    this.totalTimeoutMs = config.get('SCAN_TOTAL_TIMEOUT_MS', { infer: true });
+  }
 
   async processRepositoryScan(payload: RepositoryScanJobPayload): Promise<void> {
-    const { scanId, repositoryId, organizationId } = payload;
-
-    await this.markRunning(scanId);
+    const started = Date.now();
+    this.logger.log(
+      `Starting scan ${payload.scanId} for repository ${payload.repositoryId}`,
+    );
 
     try {
-      for (const stage of SCAN_STAGES) {
-        await this.runStage(scanId, repositoryId, organizationId, stage);
-        await delay(SCAN_STAGE_DELAY_MS);
+      const context = await this.withTotalTimeout(
+        this.pipeline.execute(payload),
+        this.totalTimeoutMs,
+      );
+
+      const durationMs = Date.now() - started;
+
+      await this.progressService.markCompleted(payload.scanId, payload.repositoryId, {
+        technologies: context.technologies,
+        findingsCount: context.findings.length,
+        recommendationsCount: context.recommendations.length,
+        dependencyIssuesCount: context.dependencyIssues.length,
+        durationMs,
+        cloneDurationMs: context.cloneDurationMs,
+        commitSha: context.commitSha,
+      });
+
+      this.logger.log(
+        `Scan ${payload.scanId} completed in ${durationMs}ms — ${context.findings.length} findings, ${context.recommendations.length} recommendations`,
+      );
+    } catch (error) {
+      if (error instanceof ScanCancelledError) {
+        this.logger.warn(`Scan ${payload.scanId} cancelled`);
+        return;
       }
 
-      await this.createMockFindings(scanId);
-      await this.markCompleted(scanId, repositoryId);
-    } catch (error) {
-      await this.markFailed(scanId, error);
+      await this.progressService.markFailed(payload.scanId, error, {
+        durationMs: Date.now() - started,
+      });
       throw error;
+    } finally {
+      await this.workspaceManager.cleanup(payload.scanId);
     }
   }
 
-  private async markRunning(scanId: string): Promise<void> {
-    const startedAt = new Date();
+  private withTotalTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new ScanTimeoutError(`Scan exceeded total timeout of ${ms}ms`));
+      }, ms);
 
-    await this.prisma.$transaction([
-      this.prisma.scan.update({
-        where: { id: scanId },
-        data: {
-          status: ScanStatus.RUNNING,
-          startedAt,
-          progress: 0,
-          currentStage: SCAN_STAGES[0],
-          metadata: { stages: [] },
-        },
-      }),
-      this.prisma.queuedJob.updateMany({
-        where: { scanId, status: QueuedJobStatus.PENDING },
-        data: {
-          status: QueuedJobStatus.PROCESSING,
-          startedAt,
-        },
-      }),
-    ]);
-  }
-
-  private async runStage(
-    scanId: string,
-    repositoryId: string,
-    organizationId: string,
-    stage: ScanStage,
-  ): Promise<void> {
-    this.logger.log(
-      `Scan ${scanId} — stage "${stage}" (repo=${repositoryId}, org=${organizationId})`,
-    );
-
-    const progress = SCAN_STAGE_PROGRESS[stage];
-    const existing = await this.prisma.scan.findUnique({
-      where: { id: scanId },
-      select: { metadata: true },
-    });
-
-    const priorMetadata =
-      existing?.metadata && typeof existing.metadata === 'object'
-        ? (existing.metadata as Record<string, unknown>)
-        : {};
-    const stages = Array.isArray(priorMetadata.stages)
-      ? [...(priorMetadata.stages as string[]), stage]
-      : [stage];
-
-    await this.prisma.scan.update({
-      where: { id: scanId },
-      data: {
-        progress,
-        currentStage: stage,
-        metadata: {
-          ...priorMetadata,
-          stages,
-          lastUpdatedAt: new Date().toISOString(),
-          simulated: true,
-        },
-      },
-    });
-  }
-
-  private async createMockFindings(scanId: string): Promise<void> {
-    await this.prisma.finding.createMany({
-      data: MOCK_FINDING_TEMPLATES.map((template) => ({
-        scanId,
-        severity: template.severity,
-        category: template.category,
-        title: template.title,
-        description: template.description,
-        filePath: template.filePath,
-        lineStart: template.lineStart,
-        ruleId: template.ruleId,
-        fingerprint: `${scanId}:${template.fingerprint}`,
-        metadata: { source: 'mock-analyzer', version: '1.0.0' },
-      })),
-    });
-  }
-
-  private async markCompleted(scanId: string, repositoryId: string): Promise<void> {
-    const completedAt = new Date();
-
-    await this.prisma.$transaction([
-      this.prisma.scan.update({
-        where: { id: scanId },
-        data: {
-          status: ScanStatus.COMPLETED,
-          progress: 100,
-          currentStage: null,
-          completedAt,
-          metadata: {
-            simulated: true,
-            findingsCount: MOCK_FINDING_TEMPLATES.length,
-            completedAt: completedAt.toISOString(),
-          },
-        },
-      }),
-      this.prisma.repository.update({
-        where: { id: repositoryId },
-        data: { lastSyncedAt: completedAt },
-      }),
-      this.prisma.queuedJob.updateMany({
-        where: {
-          scanId,
-          status: { in: [QueuedJobStatus.PENDING, QueuedJobStatus.PROCESSING] },
-        },
-        data: {
-          status: QueuedJobStatus.COMPLETED,
-          completedAt,
-        },
-      }),
-    ]);
-
-    this.logger.log(`Scan ${scanId} completed with ${MOCK_FINDING_TEMPLATES.length} findings`);
-  }
-
-  private async markFailed(scanId: string, error: unknown): Promise<void> {
-    const message = error instanceof Error ? error.message : 'Unknown scan failure';
-
-    await this.prisma.scan.update({
-      where: { id: scanId },
-      data: {
-        status: ScanStatus.FAILED,
-        errorMessage: message,
-        completedAt: new Date(),
-        metadata: { failed: true, error: message },
-      },
-    });
-
-    await this.prisma.queuedJob.updateMany({
-      where: {
-        scanId,
-        status: { in: [QueuedJobStatus.PENDING, QueuedJobStatus.PROCESSING] },
-      },
-      data: {
-        status: QueuedJobStatus.FAILED,
-        errorMessage: message,
-        completedAt: new Date(),
-      },
+      promise
+        .then((value) => {
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch((error: unknown) => {
+          clearTimeout(timer);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
     });
   }
 }
