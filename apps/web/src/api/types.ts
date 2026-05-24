@@ -43,6 +43,12 @@ export interface AuthTokens {
   expiresIn: number;
 }
 
+export interface OrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -53,7 +59,95 @@ export interface UserProfile {
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+  organization?: OrganizationDetail;
+  memberships?: Array<{
+    id: string;
+    role: UserRole;
+    organization: OrganizationSummary;
+  }>;
 }
+
+export interface OrganizationDetail extends OrganizationSummary {
+  settings?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  subscription?: {
+    status: string;
+    plan: {
+      tier: string;
+      name: string;
+      maxRepositories: number;
+      maxScansPerMonth: number;
+      maxAiTokensPerMonth: number;
+    };
+  };
+  _count?: { members: number; repositories: number };
+}
+
+export interface OrganizationMember {
+  id: string;
+  role: UserRole;
+  joinedAt: string;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    isActive: boolean;
+    lastLoginAt: string | null;
+    createdAt: string;
+  };
+}
+
+export interface Entitlements {
+  plan: { tier: string; name: string };
+  limits: {
+    maxRepositories: number;
+    maxScansPerMonth: number;
+    maxAiTokensPerMonth: number;
+    maxMembers: number;
+    reportRetentionDays: number;
+    maxApiKeys: number;
+  };
+  usage: {
+    repositories: number;
+    scans: number;
+    aiTokens: number;
+    workerJobs: number;
+    storageBytes: string;
+  };
+  remaining: {
+    repositories: number;
+    scans: number;
+    aiTokens: number;
+  };
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  createdAt: string;
+  user?: { id: string; email: string; name: string | null } | null;
+}
+
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export type ApiKeyScope =
+  | 'READ_REPOSITORIES'
+  | 'WRITE_REPOSITORIES'
+  | 'TRIGGER_SCANS'
+  | 'READ_SCANS'
+  | 'READ_USAGE'
+  | 'MANAGE_SETTINGS';
 
 export interface Repository {
   id: string;

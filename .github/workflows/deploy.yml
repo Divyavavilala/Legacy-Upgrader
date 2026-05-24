@@ -1,0 +1,26 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deployment placeholder
+        run: |
+          echo "Deploy to ${{ inputs.environment }}"
+          echo "Wire this job to Railway, Render, AWS, or kubectl apply -f deploy/kubernetes/"
+          echo "Required secrets: DATABASE_URL, JWT_* , REDIS_* , container registry credentials"

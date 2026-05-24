@@ -26,6 +26,8 @@ export interface EnvConfig {
   AI_MAX_TOKENS_PER_REQUEST: number;
   AI_MAX_CONTEXT_CHARS: number;
   AI_RATE_LIMIT_PER_MINUTE: number;
+  RATE_LIMIT_PER_MINUTE: number;
+  API_KEY_RATE_LIMIT_PER_MINUTE: number;
   AI_CACHE_TTL_SECONDS: number;
   AI_REQUEST_TIMEOUT_MS: number;
   AI_JOB_TIMEOUT_MS: number;
@@ -39,6 +41,12 @@ export interface EnvConfig {
   GEMINI_MODEL: string;
   GROQ_API_KEY?: string;
   GROQ_MODEL: string;
+  LOG_FORMAT: 'json' | 'text';
+  METRICS_ENABLED: boolean;
+  TRUST_PROXY: boolean;
+  SWAGGER_ENABLED: boolean;
+  WORKER_HEALTH_PORT: number;
+  RUN_MIGRATIONS: boolean;
 }
 
 function readString(config: Record<string, unknown>, key: string): string {
@@ -157,6 +165,8 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     AI_MAX_TOKENS_PER_REQUEST: readInt(config, 'AI_MAX_TOKENS_PER_REQUEST', 4096),
     AI_MAX_CONTEXT_CHARS: readInt(config, 'AI_MAX_CONTEXT_CHARS', 32_000),
     AI_RATE_LIMIT_PER_MINUTE: readInt(config, 'AI_RATE_LIMIT_PER_MINUTE', 30),
+    RATE_LIMIT_PER_MINUTE: readInt(config, 'RATE_LIMIT_PER_MINUTE', 120),
+    API_KEY_RATE_LIMIT_PER_MINUTE: readInt(config, 'API_KEY_RATE_LIMIT_PER_MINUTE', 60),
     AI_CACHE_TTL_SECONDS: readInt(config, 'AI_CACHE_TTL_SECONDS', 3600),
     AI_REQUEST_TIMEOUT_MS: readInt(config, 'AI_REQUEST_TIMEOUT_MS', 120_000),
     AI_JOB_TIMEOUT_MS: readInt(config, 'AI_JOB_TIMEOUT_MS', 600_000),
@@ -171,5 +181,23 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     GEMINI_MODEL: readOptionalString(config, 'GEMINI_MODEL') ?? 'gemini-1.5-flash',
     GROQ_API_KEY: readOptionalString(config, 'GROQ_API_KEY'),
     GROQ_MODEL: readOptionalString(config, 'GROQ_MODEL') ?? 'llama-3.3-70b-versatile',
+    LOG_FORMAT: readLogFormat(config),
+    METRICS_ENABLED: readBool(config, 'METRICS_ENABLED', true),
+    TRUST_PROXY: readBool(config, 'TRUST_PROXY', false),
+    SWAGGER_ENABLED: readBool(
+      config,
+      'SWAGGER_ENABLED',
+      readString(config, 'NODE_ENV') !== 'production',
+    ),
+    WORKER_HEALTH_PORT: readInt(config, 'WORKER_HEALTH_PORT', 3001),
+    RUN_MIGRATIONS: readBool(config, 'RUN_MIGRATIONS', false),
   };
+}
+
+function readLogFormat(config: Record<string, unknown>): 'json' | 'text' {
+  const raw = config.LOG_FORMAT ?? (config.NODE_ENV === 'production' ? 'json' : 'text');
+  if (raw === 'json' || raw === 'text') {
+    return raw;
+  }
+  throw new Error('Invalid LOG_FORMAT: must be json or text');
 }

@@ -11,6 +11,12 @@ import { DashboardPage } from '@/features/dashboard/dashboard-page';
 import { RepositoriesPage } from '@/features/repositories/repositories-page';
 import { RepositoryDetailPage } from '@/features/repositories/repository-detail-page';
 import { ScanDetailPage } from '@/features/scans/scan-detail-page';
+import { ApiKeysTab } from '@/features/settings/api-keys-tab';
+import { AuditTab } from '@/features/settings/audit-tab';
+import { OrganizationSettingsTab } from '@/features/settings/organization-settings-tab';
+import { SettingsPage } from '@/features/settings/settings-page';
+import { TeamTab } from '@/features/settings/team-tab';
+import { UsageTab } from '@/features/settings/usage-tab';
 import { useAuthStore } from '@/stores/auth-store';
 import { useThemeStore } from '@/stores/theme-store';
 
@@ -71,6 +77,13 @@ export default function App() {
                 <Route path="repositories" element={<RepositoriesPage />} />
                 <Route path="repositories/:id" element={<RepositoryDetailPage />} />
                 <Route path="scans/:id" element={<ScanDetailPage />} />
+                <Route path="settings" element={<SettingsPage />}>
+                  <Route index element={<OrganizationSettingsTab />} />
+                  <Route path="team" element={<TeamTab />} />
+                  <Route path="usage" element={<UsageTab />} />
+                  <Route path="api-keys" element={<ApiKeysTab />} />
+                  <Route path="audit" element={<AuditTab />} />
+                </Route>
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

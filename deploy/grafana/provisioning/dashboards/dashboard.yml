@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: LegacyUpgrader
+    orgId: 1
+    folder: LegacyUpgrader
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

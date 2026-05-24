@@ -20,7 +20,8 @@ describe('AiTokenAccountingService', () => {
       },
     };
 
-    const service = new AiTokenAccountingService(prisma as never);
+    const usageService = { incrementAiTokens: jest.fn() };
+    const service = new AiTokenAccountingService(prisma as never, usageService as never);
     const totals = await service.getScanUsageTotals('scan-1');
 
     expect(totals.totalTokens).toBe(150);

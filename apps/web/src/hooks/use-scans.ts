@@ -26,8 +26,8 @@ export function useScanProgress(scanId: string, status?: ScanStatus) {
     enabled: Boolean(scanId) && active,
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (!data) return 2000;
-      return ACTIVE.includes(data.status) ? 2000 : false;
+      if (!data) return 3000;
+      return ACTIVE.includes(data.status) ? 3000 : false;
     },
   });
 }

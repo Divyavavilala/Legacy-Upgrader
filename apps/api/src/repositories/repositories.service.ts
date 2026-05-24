@@ -4,7 +4,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { QuotasService } from '../platform/quotas.service';
+import { UsageService } from '../platform/usage.service';
 import { PrismaService } from '../prisma';
 import { detectRepositoryProvider } from '../common/utils/detect-repository-provider';
 import type { CreateRepositoryDto } from './dto';
@@ -13,9 +16,16 @@ import type { CreateRepositoryDto } from './dto';
 export class RepositoriesService {
   private readonly logger = new Logger(RepositoriesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly quotasService: QuotasService,
+    private readonly usageService: UsageService,
+    private readonly auditService: AuditService,
+  ) {}
 
-  async create(organizationId: string, dto: CreateRepositoryDto) {
+  async create(organizationId: string, dto: CreateRepositoryDto, userId?: string) {
+    await this.quotasService.assertWithinQuota(organizationId, 'repositories');
+
     try {
       const repository = await this.prisma.repository.create({
         data: {
@@ -26,6 +36,16 @@ export class RepositoriesService {
           provider: detectRepositoryProvider(dto.gitUrl),
           defaultBranch: dto.defaultBranch?.trim() ?? 'main',
         },
+      });
+
+      await this.usageService.syncRepositoryCount(organizationId);
+      await this.auditService.log({
+        organizationId,
+        userId,
+        action: AuditAction.REPOSITORY_CREATED,
+        resourceType: 'repository',
+        resourceId: repository.id,
+        metadata: { name: repository.name, slug: repository.slug },
       });
 
       this.logger.log(`Repository created: ${repository.id} (${repository.slug})`);
@@ -79,11 +99,21 @@ export class RepositoriesService {
     return repository;
   }
 
-  async remove(id: string, organizationId: string): Promise<void> {
+  async remove(id: string, organizationId: string, userId?: string): Promise<void> {
     const repository = await this.findByIdForOrganization(id, organizationId);
 
     await this.prisma.repository.delete({
       where: { id: repository.id },
+    });
+
+    await this.usageService.syncRepositoryCount(organizationId);
+    await this.auditService.log({
+      organizationId,
+      userId,
+      action: AuditAction.REPOSITORY_DELETED,
+      resourceType: 'repository',
+      resourceId: id,
+      metadata: { name: repository.name },
     });
 
     this.logger.log(`Repository deleted: ${id}`);

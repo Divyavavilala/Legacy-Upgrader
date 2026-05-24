@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { QueuedJobStatus, ScanStatus } from '@prisma/client';
+import { AuditAction, QueuedJobStatus, ScanStatus } from '@prisma/client';
+import { AuditService } from '../../audit/audit.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import type { ScanStage } from '../../scans/constants/scan-stages';
 import {
   SCAN_COMPLETED_PROGRESS,
@@ -12,7 +14,11 @@ import { ScanCancelledError } from '../types/scan-analysis.types';
 export class ScanProgressService {
   private readonly logger = new Logger(ScanProgressService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async markRunning(scanId: string, stage: ScanStage = 'initializing'): Promise<void> {
     const startedAt = new Date();
@@ -102,6 +108,31 @@ export class ScanProgressService {
         data: { status: QueuedJobStatus.COMPLETED, completedAt },
       }),
     ]);
+
+    const scan = await this.prisma.scan.findUnique({
+      where: { id: scanId },
+      select: {
+        triggeredBy: true,
+        repository: { select: { name: true, organizationId: true } },
+      },
+    });
+
+    if (scan?.repository) {
+      await this.auditService.log({
+        organizationId: scan.repository.organizationId,
+        userId: scan.triggeredBy ?? undefined,
+        action: AuditAction.SCAN_COMPLETED,
+        resourceType: 'scan',
+        resourceId: scanId,
+      });
+
+      await this.notificationsService.notifyScanCompleted(
+        scan.repository.organizationId,
+        scanId,
+        scan.repository.name,
+        scan.triggeredBy ?? undefined,
+      );
+    }
   }
 
   async markFailed(scanId: string, error: unknown, partialMetadata?: Record<string, unknown>): Promise<void> {
@@ -133,6 +164,33 @@ export class ScanProgressService {
         completedAt: new Date(),
       },
     });
+
+    const scan = await this.prisma.scan.findUnique({
+      where: { id: scanId },
+      select: {
+        triggeredBy: true,
+        repository: { select: { name: true, organizationId: true } },
+      },
+    });
+
+    if (scan?.repository) {
+      await this.auditService.log({
+        organizationId: scan.repository.organizationId,
+        userId: scan.triggeredBy ?? undefined,
+        action: AuditAction.SCAN_FAILED,
+        resourceType: 'scan',
+        resourceId: scanId,
+        metadata: { error: message },
+      });
+
+      await this.notificationsService.notifyScanFailed(
+        scan.repository.organizationId,
+        scanId,
+        scan.repository.name,
+        message,
+        scan.triggeredBy ?? undefined,
+      );
+    }
   }
 
   async assertNotCancelled(scanId: string): Promise<void> {

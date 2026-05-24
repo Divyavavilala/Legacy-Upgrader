@@ -57,6 +57,8 @@ describe('AiModernizationPipeline', () => {
       prisma as never,
       { buildSnapshot: jest.fn().mockResolvedValue({ repositoryName: 'demo', repositorySlug: 'demo' }) } as never,
       { resolvePrimaryProvider: () => ({ name: 'heuristic' }) } as never,
+      { notifyAiReportCompleted: jest.fn() } as never,
+      { log: jest.fn() } as never,
       agent as never,
       agent as never,
       agent as never,

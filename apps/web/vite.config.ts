@@ -30,6 +30,18 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      sourcemap: false,
+      target: 'es2022',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            query: ['@tanstack/react-query'],
+          },
+        },
+      },
+    },
     preview: {
       port: Number(env.VITE_PORT) || 4173,
       host: true,

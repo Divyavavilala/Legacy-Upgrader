@@ -1,6 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ScanStatus } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { QuotasService } from '../platform/quotas.service';
+import { UsageService } from '../platform/usage.service';
 import { PrismaService } from '../prisma';
 import { QueueService } from '../queue/queue.service';
 import { ScansService } from './scans.service';
@@ -58,6 +61,21 @@ describe('ScansService', () => {
         ScansService,
         { provide: PrismaService, useValue: prisma },
         { provide: QueueService, useValue: queueService },
+        {
+          provide: QuotasService,
+          useValue: { assertWithinQuota: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: UsageService,
+          useValue: {
+            incrementScans: jest.fn(),
+            incrementWorkerJobs: jest.fn(),
+          },
+        },
+        {
+          provide: AuditService,
+          useValue: { log: jest.fn() },
+        },
       ],
     }).compile();
 

@@ -4,7 +4,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { QueuedJobStatus, QueuedJobType, ScanStatus } from '@prisma/client';
+import { AuditAction, QueuedJobStatus, QueuedJobType, ScanStatus } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { QuotasService } from '../platform/quotas.service';
+import { UsageService } from '../platform/usage.service';
 import { PrismaService } from '../prisma';
 import { QueueService } from '../queue/queue.service';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.type';
@@ -17,9 +20,14 @@ export class ScansService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
+    private readonly quotasService: QuotasService,
+    private readonly usageService: UsageService,
+    private readonly auditService: AuditService,
   ) {}
 
   async triggerScan(repositoryId: string, user: AuthenticatedUser) {
+    await this.quotasService.assertWithinQuota(user.organizationId, 'scans');
+
     const repository = await this.assertRepositoryInOrg(repositoryId, user.organizationId);
 
     const scan = await this.prisma.$transaction(async (tx) => {
@@ -71,6 +79,18 @@ export class ScansService {
           bullmqJobId: jobId,
         },
       },
+    });
+
+    await this.usageService.incrementScans(user.organizationId);
+    await this.usageService.incrementWorkerJobs(user.organizationId);
+    await this.auditService.log({
+      organizationId: user.organizationId,
+      userId: user.authType === 'api_key' ? undefined : user.id,
+      apiKeyId: user.apiKeyId,
+      action: AuditAction.SCAN_TRIGGERED,
+      resourceType: 'scan',
+      resourceId: scan.id,
+      metadata: { repositoryId, jobId },
     });
 
     this.logger.log(`Scan ${scan.id} queued for repository ${repositoryId} (job ${jobId})`);

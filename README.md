@@ -159,6 +159,62 @@ Workspace packages are consumed via `@legacyupgrader/*` package names. The web a
 
 Nest deletes `dist/` on each build (`deleteOutDir`). If TypeScript incremental cache (`.tsbuildinfo`) lives **outside** `dist/`, the compiler can skip emitting while `nest build` still exits 0. The API uses `tsBuildInfoFile: "./dist/.tsbuildinfo"` in `tsconfig.build.json` so the cache is cleared with `dist/`. Run `pnpm --filter @legacyupgrader/api clean` if you need a full reset.
 
+## Production deployment
+
+Production splits the **API** and **BullMQ workers** into separate containers for independent scaling.
+
+```bash
+cp .env.production.example .env.production
+# Edit secrets, then:
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+```
+
+Includes Prometheus (9090) and Grafana (3002). See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+
+| Docs | Purpose |
+| --- | --- |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System design |
+| [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Railway, Render, AWS, K8s |
+| [docs/ONBOARDING.md](./docs/ONBOARDING.md) | Developer setup |
+| [docs/OPERATIONS.md](./docs/OPERATIONS.md) | Monitoring & incidents |
+
+CI runs on push/PR via GitHub Actions (lint, typecheck, test, Docker build).
+
+## Run locally (full guide)
+
+```bash
+# 1. Install
+pnpm install
+
+# 2. Infrastructure
+docker compose up -d postgres redis
+
+# 3. Environment
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+# Set JWT_* secrets and DATABASE_URL in apps/api/.env
+
+# 4. Database
+pnpm --filter @legacyupgrader/api db:migrate
+
+# 5. Start (API + workers + web)
+pnpm dev
+```
+
+| URL | Service |
+| --- | --- |
+| http://localhost:5173 | Dashboard |
+| http://localhost:3000/api | API |
+| http://localhost:3000/api/docs | Swagger |
+| http://localhost:3000/api/metrics | Prometheus metrics |
+
+**API-only** (separate worker terminal):
+
+```bash
+API_ONLY=true pnpm --filter @legacyupgrader/api dev
+pnpm --filter @legacyupgrader/api start:worker   # after build
+```
+
 ## License
 
 Private — all rights reserved.

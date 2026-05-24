@@ -1,8 +1,11 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { CurrentUser, Public } from '../common/decorators';
+import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { CurrentUser, Public, Roles } from '../common/decorators';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.type';
 import { AuthService } from './auth.service';
 import { LoginDto, RefreshTokenDto, RegisterDto } from './dto';
+import { SwitchOrganizationDto } from './dto/switch-organization.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -38,5 +41,16 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.getProfile(user.id);
+  }
+
+  @Post('switch-organization')
+  @ApiBearerAuth()
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, UserRole.VIEWER)
+  @ApiOperation({ summary: 'Switch active organization' })
+  switchOrganization(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SwitchOrganizationDto,
+  ) {
+    return this.authService.switchOrganization(user.id, dto.organizationId);
   }
 }

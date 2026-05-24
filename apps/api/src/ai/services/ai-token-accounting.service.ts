@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { UsageService } from '../../platform/usage.service';
 import { PrismaService } from '../../prisma';
 import type { AiCompletionResponse, AiProviderName } from '../types/ai.types';
 
@@ -14,7 +15,10 @@ const COST_PER_1K: Record<AiProviderName, { input: number; output: number }> = {
 
 @Injectable()
 export class AiTokenAccountingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usageService: UsageService,
+  ) {}
 
   estimateCost(response: AiCompletionResponse): number {
     const rates = COST_PER_1K[response.provider];
@@ -50,6 +54,10 @@ export class AiTokenAccountingService {
         requestHash: params.requestHash,
       },
     });
+
+    if (!params.cacheHit) {
+      await this.usageService.incrementAiTokens(params.organizationId, totalTokens);
+    }
   }
 
   async getScanUsageTotals(scanId: string) {

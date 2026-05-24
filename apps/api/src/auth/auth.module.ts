@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { RateLimitGuard } from '../security/rate-limit.guard';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { JwtAuthGuard, RolesGuard } from '../common/guards';
+import { ApiKeysModule } from '../api-keys/api-keys.module';
+import { UnifiedAuthGuard } from '../common/guards/unified-auth.guard';
+import { RolesGuard } from '../common/guards';
 import type { EnvConfig } from '../config/env.validation';
 import { OrganizationsModule } from '../organizations';
 import { UsersModule } from '../users';
@@ -16,6 +19,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   imports: [
     UsersModule,
     OrganizationsModule,
+    ApiKeysModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -37,7 +41,11 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtStrategy,
     {
       provide: APP_GUARD,
-      useClass: JwtAuthGuard,
+      useClass: UnifiedAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RateLimitGuard,
     },
     {
       provide: APP_GUARD,

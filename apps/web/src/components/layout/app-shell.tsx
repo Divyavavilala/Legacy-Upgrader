@@ -2,6 +2,7 @@ import {
   FolderGit2,
   LayoutDashboard,
   LogOut,
+  Settings,
   Menu,
   Moon,
   Sun,
@@ -19,6 +20,7 @@ import { useThemeStore } from '@/stores/theme-store';
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/repositories', label: 'Repositories', icon: FolderGit2 },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function AppShell() {
@@ -73,7 +75,12 @@ export function AppShell() {
         <Separator />
         <div className="p-4 text-sm">
           <p className="truncate font-medium">{user?.name ?? user?.email}</p>
-          <p className="truncate text-xs text-muted-foreground">{user?.role}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {user?.organization?.name ?? user?.role}
+          </p>
+          {user?.organization && (
+            <p className="truncate text-xs text-muted-foreground">{user.role}</p>
+          )}
         </div>
       </aside>
 

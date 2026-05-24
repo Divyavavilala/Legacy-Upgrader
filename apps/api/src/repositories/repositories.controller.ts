@@ -29,7 +29,7 @@ export class RepositoriesController {
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER)
   @ApiOperation({ summary: 'Register a repository for the organization' })
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateRepositoryDto) {
-    return this.repositoriesService.create(user.organizationId, dto);
+    return this.repositoriesService.create(user.organizationId, dto, user.id);
   }
 
   @Get()
@@ -51,7 +51,7 @@ export class RepositoriesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a repository (OWNER/ADMIN only)' })
   async remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
-    await this.repositoriesService.remove(id, user.organizationId);
+    await this.repositoriesService.remove(id, user.organizationId, user.id);
   }
 
   @Post(':id/scan')

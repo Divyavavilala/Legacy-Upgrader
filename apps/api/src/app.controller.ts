@@ -12,4 +12,16 @@ export class AppController {
   getHealth(): HealthCheckResponse {
     return this.appService.getHealth();
   }
+
+  @Public()
+  @Get('health/live')
+  getLiveness(): HealthCheckResponse {
+    return this.appService.getHealth();
+  }
+
+  @Public()
+  @Get('health/ready')
+  getReadiness() {
+    return this.appService.getReadiness();
+  }
 }

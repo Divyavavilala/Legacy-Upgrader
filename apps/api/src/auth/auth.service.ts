@@ -3,12 +3,16 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { AuditAction } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { OrgIsolationService } from '../security/org-isolation.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import type { EnvConfig } from '../config/env.validation';
 import { OrganizationsService } from '../organizations';
+import { SubscriptionsService } from '../platform/subscriptions.service';
 import { PrismaService } from '../prisma';
 import { UsersService } from '../users';
 import type { LoginDto } from './dto/login.dto';
@@ -37,6 +41,9 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly organizationsService: OrganizationsService,
+    private readonly subscriptionsService: SubscriptionsService,
+    private readonly auditService: AuditService,
+    private readonly orgIsolationService: OrgIsolationService,
     private readonly jwtService: JwtService,
     config: ConfigService<EnvConfig, true>,
   ) {
@@ -65,7 +72,7 @@ export class AuthService {
         },
       });
 
-      return tx.user.create({
+      const createdUser = await tx.user.create({
         data: {
           email: dto.email.toLowerCase(),
           name: dto.name,
@@ -74,9 +81,21 @@ export class AuthService {
           organizationId: organization.id,
         },
       });
+
+      await tx.organizationMember.create({
+        data: {
+          userId: createdUser.id,
+          organizationId: organization.id,
+          role: UserRole.OWNER,
+        },
+      });
+
+      return { user: createdUser, organizationId: organization.id };
     });
 
-    return this.issueTokenPair(user);
+    await this.subscriptionsService.ensureSubscription(user.organizationId);
+
+    return this.issueTokenPair(user.user);
   }
 
   async login(dto: LoginDto): Promise<AuthTokens> {
@@ -159,7 +178,47 @@ export class AuthService {
 
   async getProfile(userId: string) {
     const user = await this.usersService.findById(userId);
-    return this.usersService.sanitizeUser(user);
+    const sanitized = this.usersService.sanitizeUser(user);
+    const organization = await this.organizationsService.getWithSubscription(
+      user.organizationId,
+    );
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: { userId },
+      include: { organization: { select: { id: true, name: true, slug: true } } },
+    });
+
+    return { ...sanitized, organization, memberships };
+  }
+
+  async switchOrganization(userId: string, organizationId: string): Promise<AuthTokens & { organization: { id: string; name: string; slug: string }; role: UserRole }> {
+    await this.orgIsolationService.assertUserBelongsToOrg(userId, organizationId);
+
+    const membership = await this.organizationsService.switchUserOrganization(
+      userId,
+      organizationId,
+    );
+
+    await this.auditService.log({
+      organizationId,
+      userId,
+      action: AuditAction.ORGANIZATION_SWITCHED,
+      resourceType: 'organization',
+      resourceId: organizationId,
+    });
+
+    const user = await this.usersService.findById(userId);
+    const tokens = await this.issueTokenPair(user);
+
+    return {
+      ...tokens,
+      organization: membership.organization,
+      role: membership.role,
+    };
+  }
+
+  async issueTokensForUser(userId: string): Promise<AuthTokens> {
+    const user = await this.usersService.findById(userId);
+    return this.issueTokenPair(user);
   }
 
   private async issueTokenPair(

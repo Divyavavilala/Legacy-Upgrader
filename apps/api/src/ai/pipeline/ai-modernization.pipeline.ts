@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ModernizationReportStatus, type Prisma } from '@prisma/client';
+import { AuditAction, ModernizationReportStatus, type Prisma } from '@prisma/client';
+import { AuditService } from '../../audit/audit.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import type {
   AiArchitectureAnalysisJobPayload,
   AiModernizationJobPayload,
@@ -37,6 +39,8 @@ export class AiModernizationPipeline {
     private readonly prisma: PrismaService,
     private readonly contextEngine: RepositoryContextEngineService,
     private readonly providerRegistry: AiProviderRegistry,
+    private readonly notificationsService: NotificationsService,
+    private readonly auditService: AuditService,
     dependencyAgent: DependencyModernizationAgent,
     architectureAgent: ArchitectureReviewAgent,
     securityAgent: SecurityReviewAgent,
@@ -167,6 +171,19 @@ export class AiModernizationPipeline {
           publishedAt: new Date(),
         },
       });
+
+      await this.auditService.log({
+        organizationId: payload.organizationId,
+        action: AuditAction.AI_ANALYSIS_COMPLETED,
+        resourceType: 'scan',
+        resourceId: payload.scanId,
+        metadata: { reportId: report.id },
+      });
+
+      await this.notificationsService.notifyAiReportCompleted(
+        payload.organizationId,
+        payload.scanId,
+      );
 
       const scan = await this.prisma.scan.findUnique({
         where: { id: payload.scanId },
