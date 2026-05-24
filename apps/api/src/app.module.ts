@@ -6,7 +6,9 @@ import { AuthModule } from './auth';
 import { validateEnv } from './config/env.validation';
 import { OrganizationsModule } from './organizations';
 import { PrismaModule } from './prisma';
+import { QueueModule } from './queue';
 import { UsersModule } from './users';
+import { WorkersModule } from './workers';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { UsersModule } from './users';
     AuthModule,
     UsersModule,
     OrganizationsModule,
+    QueueModule,
+    WorkersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

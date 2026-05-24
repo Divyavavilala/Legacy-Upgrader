@@ -76,6 +76,21 @@ Protect routes with `@Roles()` + global `JwtAuthGuard` / `RolesGuard`. Mark publ
 
 Apply auth migration: `pnpm --filter @legacyupgrader/api db:migrate`
 
+## Job queues (Redis + BullMQ)
+
+| Queue | Purpose |
+| --- | --- |
+| `repository-scan` | Repository scanning (placeholder worker) |
+| `dependency-analysis` | Dependency analysis |
+| `ai-modernization` | AI modernization pipeline |
+| `report-generation` | Report generation |
+
+Start Redis: `docker compose up redis -d`
+
+Queue dashboard health: `GET /api/queues/health` (public)
+
+Enqueue via injected `QueueService` in feature modules. Shared names/payloads live in `@legacyupgrader/queue-constants`.
+
 ## Database (PostgreSQL + Prisma)
 
 Start Postgres locally:
@@ -121,6 +136,10 @@ Schema lives in `apps/api/prisma/schema.prisma`. NestJS uses a global `PrismaMod
 | `JWT_ACCESS_EXPIRES_IN` | Access TTL (e.g. `15m`) |
 | `JWT_REFRESH_EXPIRES_IN` | Refresh TTL (e.g. `7d`) |
 | `BCRYPT_ROUNDS` | Password hashing cost (10–15) |
+| `REDIS_HOST` | Redis hostname |
+| `REDIS_PORT` | Redis port (default `6379`) |
+| `REDIS_DB` | Redis database index (0–15) |
+| `REDIS_PASSWORD` | Optional Redis password |
 
 ## Docker
 

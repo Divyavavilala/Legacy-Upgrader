@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/shared-types" },
     { "path": "./packages/rule-definitions" },
+    { "path": "./packages/queue-constants" },
     { "path": "./apps/web" },
     { "path": "./apps/api" }
   ]
