@@ -8,5 +8,6 @@ function requireEnv(key: keyof ImportMetaEnv, fallback?: string): string {
 
 export const env = {
   appName: requireEnv('VITE_APP_NAME', 'LegacyUpgrader'),
+  /** Use `/api` in dev (Vite proxy) or full URL in production */
   apiUrl: requireEnv('VITE_API_URL', '/api'),
 } as const;
