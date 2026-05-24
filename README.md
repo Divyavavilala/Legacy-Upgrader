@@ -58,6 +58,24 @@ pnpm --filter @legacyupgrader/web dev
 pnpm --filter @legacyupgrader/api dev
 ```
 
+## Authentication (API)
+
+Email/password JWT auth with organization-scoped RBAC.
+
+| Endpoint | Auth | Description |
+| --- | --- | --- |
+| `POST /api/auth/register` | Public | Create org + owner user |
+| `POST /api/auth/login` | Public | Issue access + refresh tokens |
+| `POST /api/auth/refresh` | Public | Rotate refresh token |
+| `POST /api/auth/logout` | Public | Revoke refresh token |
+| `GET /api/auth/me` | Bearer JWT | Current user profile |
+
+**Roles:** `OWNER`, `ADMIN`, `DEVELOPER`, `VIEWER`
+
+Protect routes with `@Roles()` + global `JwtAuthGuard` / `RolesGuard`. Mark public routes with `@Public()`. Use `@CurrentUser()` for the authenticated principal.
+
+Apply auth migration: `pnpm --filter @legacyupgrader/api db:migrate`
+
 ## Database (PostgreSQL + Prisma)
 
 Start Postgres locally:
@@ -97,6 +115,12 @@ Schema lives in `apps/api/prisma/schema.prisma`. NestJS uses a global `PrismaMod
 | `PORT` | HTTP port (default `3000`) |
 | `CORS_ORIGIN` | Allowed browser origin for CORS |
 | `DATABASE_URL` | PostgreSQL connection string (Prisma) |
+| `JWT_ACCESS_SECRET` | Access token signing secret (32+ chars) |
+| `JWT_REFRESH_SECRET` | Refresh token signing secret (32+ chars) |
+| `JWT_REFRESH_PEPPER` | HMAC pepper for stored refresh token hashes |
+| `JWT_ACCESS_EXPIRES_IN` | Access TTL (e.g. `15m`) |
+| `JWT_REFRESH_EXPIRES_IN` | Refresh TTL (e.g. `7d`) |
+| `BCRYPT_ROUNDS` | Password hashing cost (10–15) |
 
 ## Docker
 

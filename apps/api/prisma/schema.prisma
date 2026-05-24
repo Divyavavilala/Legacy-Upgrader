@@ -18,7 +18,7 @@ datasource db {
 enum UserRole {
   OWNER
   ADMIN
-  MEMBER
+  DEVELOPER
   VIEWER
 }
 
@@ -136,19 +136,37 @@ model User {
   organizationId String   @map("organization_id")
   email          String   @unique
   name           String?
-  passwordHash   String?  @map("password_hash")
-  role           UserRole @default(MEMBER)
+  passwordHash   String   @map("password_hash")
+  role           UserRole @default(DEVELOPER)
   isActive       Boolean  @default(true) @map("is_active")
   lastLoginAt    DateTime? @map("last_login_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  queuedJobs   QueuedJob[]  @relation("QueuedJobCreatedBy")
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  refreshTokens  RefreshToken[]
+  queuedJobs     QueuedJob[]    @relation("QueuedJobCreatedBy")
 
   @@index([organizationId])
   @@index([organizationId, role])
   @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  familyId  String    @map("family_id")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }
 
 // -----------------------------------------------------------------------------

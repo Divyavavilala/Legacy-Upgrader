@@ -27,6 +27,12 @@ services:
       PORT: 3000
       CORS_ORIGIN: http://localhost:8080
       DATABASE_URL: postgresql://legacyupgrader:legacyupgrader@postgres:5432/legacyupgrader?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET}
+      JWT_REFRESH_PEPPER: ${JWT_REFRESH_PEPPER:?Set JWT_REFRESH_PEPPER}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
     depends_on:
       postgres:
         condition: service_healthy
