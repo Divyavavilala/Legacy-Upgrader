@@ -1,0 +1,340 @@
+// =============================================================================
+// LegacyUpgrader — PostgreSQL schema
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum RepositoryProvider {
+  GITHUB
+  GITLAB
+  BITBUCKET
+  AZURE_DEVOPS
+  LOCAL
+  OTHER
+}
+
+enum ScanStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum FindingSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FindingCategory {
+  SECURITY
+  DEPENDENCY
+  CODE_QUALITY
+  ARCHITECTURE
+  LICENSING
+  PERFORMANCE
+  OTHER
+}
+
+enum DependencyIssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MigrationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum MigrationEffort {
+  TRIVIAL
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+enum MigrationRecommendationStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  DISMISSED
+  DEFERRED
+}
+
+enum ModernizationReportStatus {
+  DRAFT
+  GENERATING
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QueuedJobType {
+  SCAN_REPOSITORY
+  GENERATE_REPORT
+  SYNC_REPOSITORY
+  MIGRATION_ANALYSIS
+  DEPENDENCY_AUDIT
+  OTHER
+}
+
+enum QueuedJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+  CANCELLED
+}
+
+// -----------------------------------------------------------------------------
+// Core tenancy
+// -----------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users        User[]
+  repositories Repository[]
+  queuedJobs   QueuedJob[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  email          String   @unique
+  name           String?
+  passwordHash   String?  @map("password_hash")
+  role           UserRole @default(MEMBER)
+  isActive       Boolean  @default(true) @map("is_active")
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  queuedJobs   QueuedJob[]  @relation("QueuedJobCreatedBy")
+
+  @@index([organizationId])
+  @@index([organizationId, role])
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// Repositories & scans
+// -----------------------------------------------------------------------------
+
+model Repository {
+  id             String             @id @default(cuid())
+  organizationId String             @map("organization_id")
+  name           String
+  slug           String
+  url            String?
+  provider       RepositoryProvider @default(GITHUB)
+  defaultBranch  String?            @default("main") @map("default_branch")
+  externalId     String?            @map("external_id")
+  isActive       Boolean            @default(true) @map("is_active")
+  lastSyncedAt   DateTime?          @map("last_synced_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scans                    Scan[]
+  migrationRecommendations MigrationRecommendation[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([organizationId, isActive])
+  @@map("repositories")
+}
+
+model Scan {
+  id           String     @id @default(cuid())
+  repositoryId String     @map("repository_id")
+  status       ScanStatus @default(PENDING)
+  branch       String?
+  commitSha    String?    @map("commit_sha")
+  triggeredBy  String?    @map("triggered_by")
+  startedAt    DateTime?  @map("started_at")
+  completedAt  DateTime?  @map("completed_at")
+  errorMessage String?    @map("error_message") @db.Text
+  metadata     Json?
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  repository               Repository                @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  findings                 Finding[]
+  dependencyIssues         DependencyIssue[]
+  migrationRecommendations MigrationRecommendation[]
+  modernizationReport      ModernizationReport?
+  queuedJobs               QueuedJob[]
+
+  @@index([repositoryId])
+  @@index([repositoryId, status])
+  @@index([status])
+  @@index([createdAt])
+  @@map("scans")
+}
+
+// -----------------------------------------------------------------------------
+// Scan results
+// -----------------------------------------------------------------------------
+
+model Finding {
+  id          String          @id @default(cuid())
+  scanId      String          @map("scan_id")
+  severity    FindingSeverity
+  category    FindingCategory
+  title       String
+  description String?         @db.Text
+  filePath    String?         @map("file_path")
+  lineStart   Int?            @map("line_start")
+  lineEnd     Int?            @map("line_end")
+  ruleId      String?         @map("rule_id")
+  fingerprint String?
+  metadata    Json?
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([scanId, severity])
+  @@index([scanId, category])
+  @@index([fingerprint])
+  @@map("findings")
+}
+
+model DependencyIssue {
+  id                 String                  @id @default(cuid())
+  scanId             String                  @map("scan_id")
+  packageName        String                  @map("package_name")
+  currentVersion     String?                 @map("current_version")
+  recommendedVersion String?               @map("recommended_version")
+  severity           DependencyIssueSeverity
+  ecosystem          String?
+  isDirect           Boolean                 @default(true) @map("is_direct")
+  cveIds             String[]                @default([]) @map("cve_ids")
+  metadata           Json?
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([scanId, severity])
+  @@index([packageName])
+  @@map("dependency_issues")
+}
+
+// -----------------------------------------------------------------------------
+// Modernization outputs
+// -----------------------------------------------------------------------------
+
+model MigrationRecommendation {
+  id           String                        @id @default(cuid())
+  repositoryId String?                       @map("repository_id")
+  scanId       String?                       @map("scan_id")
+  title        String
+  description  String?                       @db.Text
+  priority     MigrationPriority             @default(MEDIUM)
+  effort       MigrationEffort               @default(MEDIUM)
+  targetStack  String?                       @map("target_stack")
+  status       MigrationRecommendationStatus @default(OPEN)
+  metadata     Json?
+  createdAt    DateTime                      @default(now()) @map("created_at")
+  updatedAt    DateTime                      @updatedAt @map("updated_at")
+
+  repository Repository? @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  scan         Scan?       @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId])
+  @@index([scanId])
+  @@index([status])
+  @@index([priority])
+  @@map("migration_recommendations")
+}
+
+model ModernizationReport {
+  id          String                    @id @default(cuid())
+  scanId      String                    @unique @map("scan_id")
+  status      ModernizationReportStatus @default(DRAFT)
+  title       String?
+  summary     String?                   @db.Text
+  content     Json?
+  publishedAt DateTime?                 @map("published_at")
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  updatedAt   DateTime                  @updatedAt @map("updated_at")
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("modernization_reports")
+}
+
+// -----------------------------------------------------------------------------
+// Background jobs
+// -----------------------------------------------------------------------------
+
+model QueuedJob {
+  id             String          @id @default(cuid())
+  organizationId String?         @map("organization_id")
+  scanId         String?         @map("scan_id")
+  createdById    String?         @map("created_by_id")
+  type           QueuedJobType
+  status         QueuedJobStatus @default(PENDING)
+  priority       Int             @default(0)
+  payload        Json?
+  result         Json?
+  attempts       Int             @default(0)
+  maxAttempts    Int             @default(3) @map("max_attempts")
+  scheduledAt    DateTime?       @map("scheduled_at")
+  startedAt      DateTime?       @map("started_at")
+  completedAt    DateTime?       @map("completed_at")
+  errorMessage   String?         @map("error_message") @db.Text
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scan           Scan?          @relation(fields: [scanId], references: [id], onDelete: SetNull)
+  createdBy      User?          @relation("QueuedJobCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([scanId])
+  @@index([status])
+  @@index([type, status])
+  @@index([scheduledAt])
+  @@index([priority, createdAt])
+  @@map("queued_jobs")
+}

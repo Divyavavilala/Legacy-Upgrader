@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: legacyupgrader
+      POSTGRES_PASSWORD: legacyupgrader
+      POSTGRES_DB: legacyupgrader
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U legacyupgrader -d legacyupgrader']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
@@ -10,6 +26,10 @@ services:
       APP_NAME: LegacyUpgrader API
       PORT: 3000
       CORS_ORIGIN: http://localhost:8080
+      DATABASE_URL: postgresql://legacyupgrader:legacyupgrader@postgres:5432/legacyupgrader?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -33,3 +53,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
+
+volumes:
+  postgres_data:

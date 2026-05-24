@@ -5,6 +5,9 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.enableShutdownHooks();
+
   const config = app.get(ConfigService);
   const port = config.get<number>('PORT', 3000);
   const corsOrigin = config.get<string>('CORS_ORIGIN', 'http://localhost:5173');

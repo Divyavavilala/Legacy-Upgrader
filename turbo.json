@@ -2,7 +2,7 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "globalEnv": ["NODE_ENV"],
-  "globalPassThroughEnv": ["VITE_*", "PORT", "CORS_ORIGIN", "APP_NAME"],
+  "globalPassThroughEnv": ["VITE_*", "PORT", "CORS_ORIGIN", "APP_NAME", "DATABASE_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

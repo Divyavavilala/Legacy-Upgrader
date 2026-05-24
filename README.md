@@ -58,6 +58,26 @@ pnpm --filter @legacyupgrader/web dev
 pnpm --filter @legacyupgrader/api dev
 ```
 
+## Database (PostgreSQL + Prisma)
+
+Start Postgres locally:
+
+```bash
+docker compose up postgres -d
+```
+
+Configure `apps/api/.env` (see `.env.example`), then:
+
+```bash
+pnpm --filter @legacyupgrader/api db:migrate    # apply migrations (dev)
+pnpm --filter @legacyupgrader/api db:generate   # regenerate client
+pnpm --filter @legacyupgrader/api db:studio     # Prisma Studio
+```
+
+Production deploy: `pnpm --filter @legacyupgrader/api db:migrate:deploy`
+
+Schema lives in `apps/api/prisma/schema.prisma`. NestJS uses a global `PrismaModule` with lifecycle hooks and graceful shutdown via `app.enableShutdownHooks()`.
+
 ## Environment variables
 
 ### Web (`apps/web/.env`)
@@ -76,6 +96,7 @@ pnpm --filter @legacyupgrader/api dev
 | `APP_NAME` | Service name in health responses |
 | `PORT` | HTTP port (default `3000`) |
 | `CORS_ORIGIN` | Allowed browser origin for CORS |
+| `DATABASE_URL` | PostgreSQL connection string (Prisma) |
 
 ## Docker
 

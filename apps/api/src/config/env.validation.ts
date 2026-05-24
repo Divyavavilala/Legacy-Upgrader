@@ -3,6 +3,7 @@ export interface EnvConfig {
   APP_NAME: string;
   PORT: number;
   CORS_ORIGIN: string;
+  DATABASE_URL: string;
 }
 
 function readString(config: Record<string, unknown>, key: string): string {
@@ -25,5 +26,6 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     APP_NAME: readString(config, 'APP_NAME'),
     PORT: port,
     CORS_ORIGIN: readString(config, 'CORS_ORIGIN'),
+    DATABASE_URL: readString(config, 'DATABASE_URL'),
   };
 }
