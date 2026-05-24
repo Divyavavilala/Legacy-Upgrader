@@ -6,16 +6,14 @@ import { AiCacheService } from '../services/ai-cache.service';
 import { AiRateLimiterService } from '../services/ai-rate-limiter.service';
 import { AiTokenAccountingService } from '../services/ai-token-accounting.service';
 import { RepositoryContextEngineService } from '../services/repository-context-engine.service';
+import { DEPENDENCY_MODERNIZATION_PROMPT } from '../prompts';
 import { BaseAiAgent } from './base-ai.agent';
 
 @Injectable()
 export class DependencyModernizationAgent extends BaseAiAgent {
   readonly focusLabel = 'Dependency modernization and upgrade sequencing';
 
-  protected readonly systemPrompt = `You are a senior dependency modernization expert for LegacyUpgrader.
-Analyze package manifests, dependency issues, and findings. Produce actionable upgrade sequencing.
-Focus on security patches, major version migrations, and breaking change mitigation.
-Respond ONLY with valid JSON.`;
+  protected readonly systemPrompt = DEPENDENCY_MODERNIZATION_PROMPT.system;
 
   constructor(
     providerRegistry: AiProviderRegistry,
@@ -33,6 +31,7 @@ Respond ONLY with valid JSON.`;
       cache,
       rateLimiter,
       config.get('AI_CACHE_TTL_SECONDS', { infer: true }),
+      config.get('AI_MAX_TOKENS_PER_REQUEST', { infer: true }),
     );
   }
 }

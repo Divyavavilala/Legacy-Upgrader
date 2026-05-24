@@ -29,6 +29,7 @@ export abstract class BaseAiAgent {
     protected readonly cache: AiCacheService,
     protected readonly rateLimiter: AiRateLimiterService,
     protected readonly cacheTtlSeconds: number,
+    protected readonly maxTokensPerRequest: number,
   ) {
     this.agentType = agentType;
     this.logger = new Logger(this.constructor.name);
@@ -70,7 +71,7 @@ export abstract class BaseAiAgent {
       systemPrompt: this.systemPrompt,
       userPrompt,
       jsonMode: true,
-      maxTokens: 2048,
+      maxTokens: this.maxTokensPerRequest,
       temperature: 0.2,
     });
 

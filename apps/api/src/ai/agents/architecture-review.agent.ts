@@ -6,16 +6,14 @@ import { AiCacheService } from '../services/ai-cache.service';
 import { AiRateLimiterService } from '../services/ai-rate-limiter.service';
 import { AiTokenAccountingService } from '../services/ai-token-accounting.service';
 import { RepositoryContextEngineService } from '../services/repository-context-engine.service';
+import { ARCHITECTURE_ANALYSIS_PROMPT } from '../prompts';
 import { BaseAiAgent } from './base-ai.agent';
 
 @Injectable()
 export class ArchitectureReviewAgent extends BaseAiAgent {
   readonly focusLabel = 'Semantic architecture and modularity analysis';
 
-  protected readonly systemPrompt = `You are a principal software architect for LegacyUpgrader.
-Perform semantic architecture analysis: code organization, anti-patterns, duplicated responsibilities,
-weak modularity, separation of concerns, and legacy structural risks.
-Respond ONLY with valid JSON.`;
+  protected readonly systemPrompt = ARCHITECTURE_ANALYSIS_PROMPT.system;
 
   constructor(
     providerRegistry: AiProviderRegistry,
@@ -33,6 +31,7 @@ Respond ONLY with valid JSON.`;
       cache,
       rateLimiter,
       config.get('AI_CACHE_TTL_SECONDS', { infer: true }),
+      config.get('AI_MAX_TOKENS_PER_REQUEST', { infer: true }),
     );
   }
 }

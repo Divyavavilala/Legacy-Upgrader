@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EnvConfig } from '../../config/env.validation';
 import type { AiCompletionRequest, AiCompletionResponse } from '../types/ai.types';
+import { fetchWithTimeout } from '../utils/ai-request.util';
 import type { AiProvider } from './ai-provider.interface';
 
 @Injectable()
@@ -10,10 +11,12 @@ export class GeminiProvider implements AiProvider {
   private readonly logger = new Logger(GeminiProvider.name);
   private readonly apiKey?: string;
   private readonly model: string;
+  private readonly requestTimeoutMs: number;
 
   constructor(config: ConfigService<EnvConfig, true>) {
     this.apiKey = config.get('GEMINI_API_KEY', { infer: true });
     this.model = config.get('GEMINI_MODEL', { infer: true });
+    this.requestTimeoutMs = config.get('AI_REQUEST_TIMEOUT_MS', { infer: true });
   }
 
   isConfigured(): boolean {
@@ -27,22 +30,26 @@ export class GeminiProvider implements AiProvider {
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: `${request.systemPrompt}\n\n${request.userPrompt}` }],
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: `${request.systemPrompt}\n\n${request.userPrompt}` }],
+            },
+          ],
+          generationConfig: {
+            temperature: request.temperature ?? 0.2,
+            maxOutputTokens: request.maxTokens ?? 2048,
+            responseMimeType: request.jsonMode ? 'application/json' : 'text/plain',
           },
-        ],
-        generationConfig: {
-          temperature: request.temperature ?? 0.2,
-          maxOutputTokens: request.maxTokens ?? 2048,
-          responseMimeType: request.jsonMode ? 'application/json' : 'text/plain',
-        },
-      }),
-    });
+        }),
+      },
+      this.requestTimeoutMs,
+    );
 
     if (!response.ok) {
       const body = await response.text();

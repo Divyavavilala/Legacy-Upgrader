@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EnvConfig } from '../../config/env.validation';
 import type { AiCompletionRequest, AiCompletionResponse } from '../types/ai.types';
+import { fetchWithTimeout } from '../utils/ai-request.util';
 import type { AiProvider } from './ai-provider.interface';
 
 @Injectable()
@@ -10,10 +11,12 @@ export class ClaudeProvider implements AiProvider {
   private readonly logger = new Logger(ClaudeProvider.name);
   private readonly apiKey?: string;
   private readonly model: string;
+  private readonly requestTimeoutMs: number;
 
   constructor(config: ConfigService<EnvConfig, true>) {
     this.apiKey = config.get('ANTHROPIC_API_KEY', { infer: true });
     this.model = config.get('ANTHROPIC_MODEL', { infer: true });
+    this.requestTimeoutMs = config.get('AI_REQUEST_TIMEOUT_MS', { infer: true });
   }
 
   isConfigured(): boolean {
@@ -25,21 +28,25 @@ export class ClaudeProvider implements AiProvider {
       throw new Error('Anthropic API key is not configured');
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
+    const response = await fetchWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: request.maxTokens ?? 2048,
+          temperature: request.temperature ?? 0.2,
+          system: request.systemPrompt,
+          messages: [{ role: 'user', content: request.userPrompt }],
+        }),
       },
-      body: JSON.stringify({
-        model: this.model,
-        max_tokens: request.maxTokens ?? 2048,
-        temperature: request.temperature ?? 0.2,
-        system: request.systemPrompt,
-        messages: [{ role: 'user', content: request.userPrompt }],
-      }),
-    });
+      this.requestTimeoutMs,
+    );
 
     if (!response.ok) {
       const body = await response.text();

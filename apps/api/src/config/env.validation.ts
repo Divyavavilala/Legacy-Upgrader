@@ -27,6 +27,9 @@ export interface EnvConfig {
   AI_MAX_CONTEXT_CHARS: number;
   AI_RATE_LIMIT_PER_MINUTE: number;
   AI_CACHE_TTL_SECONDS: number;
+  AI_REQUEST_TIMEOUT_MS: number;
+  AI_JOB_TIMEOUT_MS: number;
+  AI_PROVIDER_MAX_RETRIES: number;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL: string;
   OPENAI_BASE_URL: string;
@@ -155,6 +158,9 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     AI_MAX_CONTEXT_CHARS: readInt(config, 'AI_MAX_CONTEXT_CHARS', 32_000),
     AI_RATE_LIMIT_PER_MINUTE: readInt(config, 'AI_RATE_LIMIT_PER_MINUTE', 30),
     AI_CACHE_TTL_SECONDS: readInt(config, 'AI_CACHE_TTL_SECONDS', 3600),
+    AI_REQUEST_TIMEOUT_MS: readInt(config, 'AI_REQUEST_TIMEOUT_MS', 120_000),
+    AI_JOB_TIMEOUT_MS: readInt(config, 'AI_JOB_TIMEOUT_MS', 600_000),
+    AI_PROVIDER_MAX_RETRIES: readInt(config, 'AI_PROVIDER_MAX_RETRIES', 2),
     OPENAI_API_KEY: readOptionalString(config, 'OPENAI_API_KEY'),
     OPENAI_MODEL: readOptionalString(config, 'OPENAI_MODEL') ?? 'gpt-4o-mini',
     OPENAI_BASE_URL: readOptionalString(config, 'OPENAI_BASE_URL') ?? 'https://api.openai.com/v1',

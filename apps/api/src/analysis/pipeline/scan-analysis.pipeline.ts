@@ -10,6 +10,7 @@ import { GitAnalyzer } from '../git/git-analyzer.service';
 import { RecommendationEngine } from '../recommendation/recommendation-engine.service';
 import type { RepositoryAnalysisSnapshot } from '../types/repository-snapshot.types';
 import type { ScanAnalysisContext } from '../types/scan-analysis.types';
+import { collectConfigHighlights } from '../../ai/utils/collect-config-highlights.util';
 import { WorkspaceManagerService } from '../workspace/workspace-manager.service';
 import { ScanProgressService } from './scan-progress.service';
 
@@ -83,6 +84,8 @@ export class ScanAnalysisPipeline {
   }
 
   private async persistResults(context: ScanAnalysisContext): Promise<void> {
+    const configHighlights = await collectConfigHighlights(context.repositoryPath);
+
     const analysisSnapshot: RepositoryAnalysisSnapshot = {
       technologies: context.technologies,
       repositoryName: '',
@@ -107,7 +110,7 @@ export class ScanAnalysisPipeline {
         dependencies: p.dependencies,
         devDependencies: p.devDependencies,
       })),
-      configHighlights: {},
+      configHighlights,
     };
 
     const repository = await this.prisma.repository.findUnique({

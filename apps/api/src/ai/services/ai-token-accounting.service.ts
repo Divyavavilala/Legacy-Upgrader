@@ -54,6 +54,24 @@ export class AiTokenAccountingService {
 
   async getScanUsageTotals(scanId: string) {
     const rows = await this.prisma.aiTokenUsage.findMany({ where: { scanId } });
+    return this.summarizeRows(rows);
+  }
+
+  async getRecentPlatformTotals() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const rows = await this.prisma.aiTokenUsage.findMany({
+      where: { createdAt: { gte: since } },
+    });
+    return { ...this.summarizeRows(rows), window: '24h' as const };
+  }
+
+  private summarizeRows(
+    rows: Array<{
+      totalTokens: number;
+      estimatedCostUsd: { toString(): string } | null;
+      cacheHit: boolean;
+    }>,
+  ) {
     return {
       totalTokens: rows.reduce((sum, r) => sum + r.totalTokens, 0),
       estimatedCostUsd: rows.reduce(
@@ -62,6 +80,7 @@ export class AiTokenAccountingService {
       ),
       requests: rows.length,
       cacheHits: rows.filter((r) => r.cacheHit).length,
+      window: 'all' as const,
     };
   }
 }

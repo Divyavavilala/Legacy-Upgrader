@@ -94,10 +94,14 @@ export class AiModernizationPipeline {
     };
 
     const insights: Array<{ agentType: AiAgentType; payload: AgentInsightPayload }> = [];
+    const pipelineStarted = Date.now();
 
-    for (const agentType of agentTypes) {
+    for (let index = 0; index < agentTypes.length; index++) {
+      const agentType = agentTypes[index]!;
       const agent = this.allAgents.find((candidate) => candidate.agentType === agentType);
       if (!agent) continue;
+
+      await this.updateAiProgress(payload.scanId, agentType, index, agentTypes.length);
 
       this.logger.log(`Running agent ${agentType} for scan ${payload.scanId}`);
       const result = await agent.run(agentCtx);
@@ -181,6 +185,7 @@ export class AiModernizationPipeline {
             aiCompleted: true,
             aiReportId: report.id,
             aiProvider: primaryProvider.name,
+            aiDurationMs: Date.now() - pipelineStarted,
           },
         },
       });
@@ -191,6 +196,34 @@ export class AiModernizationPipeline {
     }
 
     return report.id;
+  }
+
+  private async updateAiProgress(
+    scanId: string,
+    agentType: AiAgentType,
+    index: number,
+    total: number,
+  ): Promise<void> {
+    const scan = await this.prisma.scan.findUnique({
+      where: { id: scanId },
+      select: { metadata: true },
+    });
+    const priorMeta =
+      scan?.metadata && typeof scan.metadata === 'object'
+        ? (scan.metadata as Record<string, unknown>)
+        : {};
+
+    await this.prisma.scan.update({
+      where: { id: scanId },
+      data: {
+        metadata: {
+          ...priorMeta,
+          aiStage: agentType,
+          aiProgress: Math.round(((index + 1) / total) * 100),
+          aiPipelineUpdatedAt: new Date().toISOString(),
+        },
+      },
+    });
   }
 
   private async ensureReport(scanId: string, reportId?: string) {

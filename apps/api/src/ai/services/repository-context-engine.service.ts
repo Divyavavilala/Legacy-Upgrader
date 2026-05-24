@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { EnvConfig } from '../../config/env.validation';
 import { PrismaService } from '../../prisma';
 import type { RepositoryAnalysisSnapshot } from '../../analysis/types/repository-snapshot.types';
+import { chunkSections, type ContextChunk } from '../utils/context-compression.util';
 
 @Injectable()
 export class RepositoryContextEngineService {
@@ -63,43 +64,79 @@ export class RepositoryContextEngineService {
   }
 
   buildContextDocument(snapshot: RepositoryAnalysisSnapshot, focus: string): string {
-    const sections: string[] = [
-      `# Repository: ${snapshot.repositoryName} (${snapshot.repositorySlug})`,
-      `## Focus: ${focus}`,
-      `## Technologies\n${snapshot.technologies.join(', ') || 'unknown'}`,
-      `## Findings (${snapshot.findingsSummary.length})`,
-      ...snapshot.findingsSummary.map(
-        (f) => `- [${f.severity}/${f.category}] ${f.title}${f.ruleId ? ` (${f.ruleId})` : ''}`,
-      ),
-      `## Dependency issues (${snapshot.dependencyIssuesSummary.length})`,
-      ...snapshot.dependencyIssuesSummary.map(
-        (d) => `- [${d.severity}] ${d.packageName}@${d.currentVersion ?? '?'}`,
-      ),
-      `## Existing recommendations (${snapshot.recommendationsSummary.length})`,
-      ...snapshot.recommendationsSummary.map((r) => `- [${r.priority}] ${r.title}`),
+    const chunks: ContextChunk[] = [
+      {
+        id: 'header',
+        priority: 100,
+        content: `# Repository: ${snapshot.repositoryName} (${snapshot.repositorySlug})\n## Focus: ${focus}\n## Technologies\n${snapshot.technologies.join(', ') || 'unknown'}`,
+      },
     ];
 
     if (snapshot.packageManifests.length > 0) {
-      sections.push('## Package manifests (prioritized)');
-      for (const pkg of snapshot.packageManifests.slice(0, 5)) {
+      const manifestLines = snapshot.packageManifests.slice(0, 5).map((pkg) => {
         const deps = Object.entries(pkg.dependencies).slice(0, 25);
-        sections.push(
-          `### ${pkg.path}\ndependencies: ${deps.map(([k, v]) => `${k}@${v}`).join(', ')}`,
-        );
-      }
+        return `### ${pkg.path}\ndependencies: ${deps.map(([k, v]) => `${k}@${v}`).join(', ')}`;
+      });
+      chunks.push({
+        id: 'manifests',
+        priority: 95,
+        content: `## Package manifests (prioritized)\n${manifestLines.join('\n')}`,
+      });
     }
 
-    if (Object.keys(snapshot.configHighlights).length > 0) {
-      sections.push('## Config highlights');
-      for (const [path, excerpt] of Object.entries(snapshot.configHighlights)) {
-        sections.push(`### ${path}\n\`\`\`\n${excerpt.slice(0, 800)}\n\`\`\``);
-      }
+    const configEntries = Object.entries(snapshot.configHighlights);
+    if (configEntries.length > 0) {
+      const configLines = configEntries
+        .slice(0, 12)
+        .map(([path, excerpt]) => `### ${path}\n\`\`\`\n${excerpt.slice(0, 800)}\n\`\`\``);
+      chunks.push({
+        id: 'config',
+        priority: 90,
+        content: `## Config highlights\n${configLines.join('\n')}`,
+      });
     }
 
-    let document = sections.join('\n');
-    if (document.length > this.maxContextChars) {
-      document = `${document.slice(0, this.maxContextChars)}\n\n[context truncated for token budget]`;
-      this.logger.debug(`Context truncated to ${this.maxContextChars} chars for focus=${focus}`);
+    if (snapshot.dependencyIssuesSummary.length > 0) {
+      chunks.push({
+        id: 'dependencies',
+        priority: 85,
+        content: [
+          `## Dependency issues (${snapshot.dependencyIssuesSummary.length})`,
+          ...snapshot.dependencyIssuesSummary.map(
+            (d) => `- [${d.severity}] ${d.packageName}@${d.currentVersion ?? '?'}`,
+          ),
+        ].join('\n'),
+      });
+    }
+
+    if (snapshot.findingsSummary.length > 0) {
+      chunks.push({
+        id: 'findings',
+        priority: 80,
+        content: [
+          `## Analyzer findings (${snapshot.findingsSummary.length})`,
+          ...snapshot.findingsSummary.map(
+            (f) =>
+              `- [${f.severity}/${f.category}] ${f.title}${f.ruleId ? ` (${f.ruleId})` : ''}`,
+          ),
+        ].join('\n'),
+      });
+    }
+
+    if (snapshot.recommendationsSummary.length > 0) {
+      chunks.push({
+        id: 'recommendations',
+        priority: 70,
+        content: [
+          `## Existing recommendations (${snapshot.recommendationsSummary.length})`,
+          ...snapshot.recommendationsSummary.map((r) => `- [${r.priority}] ${r.title}`),
+        ].join('\n'),
+      });
+    }
+
+    const document = chunkSections(chunks, this.maxContextChars);
+    if (document.length >= this.maxContextChars - 32) {
+      this.logger.debug(`Context at budget limit (${this.maxContextChars} chars) for focus=${focus}`);
     }
 
     return document;

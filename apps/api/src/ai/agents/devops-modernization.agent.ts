@@ -6,15 +6,14 @@ import { AiCacheService } from '../services/ai-cache.service';
 import { AiRateLimiterService } from '../services/ai-rate-limiter.service';
 import { AiTokenAccountingService } from '../services/ai-token-accounting.service';
 import { RepositoryContextEngineService } from '../services/repository-context-engine.service';
+import { DEVOPS_MODERNIZATION_PROMPT } from '../prompts';
 import { BaseAiAgent } from './base-ai.agent';
 
 @Injectable()
 export class DevOpsModernizationAgent extends BaseAiAgent {
   readonly focusLabel = 'DevOps modernization (CI/CD, Docker, Kubernetes)';
 
-  protected readonly systemPrompt = `You are a DevOps modernization advisor for LegacyUpgrader.
-Advise on CI/CD pipelines, Dockerization, Kubernetes adoption, and deployment reliability.
-Respond ONLY with valid JSON.`;
+  protected readonly systemPrompt = DEVOPS_MODERNIZATION_PROMPT.system;
 
   constructor(
     providerRegistry: AiProviderRegistry,
@@ -32,6 +31,7 @@ Respond ONLY with valid JSON.`;
       cache,
       rateLimiter,
       config.get('AI_CACHE_TTL_SECONDS', { infer: true }),
+      config.get('AI_MAX_TOKENS_PER_REQUEST', { infer: true }),
     );
   }
 }

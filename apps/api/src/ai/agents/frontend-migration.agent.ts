@@ -6,15 +6,14 @@ import { AiCacheService } from '../services/ai-cache.service';
 import { AiRateLimiterService } from '../services/ai-rate-limiter.service';
 import { AiTokenAccountingService } from '../services/ai-token-accounting.service';
 import { RepositoryContextEngineService } from '../services/repository-context-engine.service';
+import { FRONTEND_MODERNIZATION_PROMPT } from '../prompts';
 import { BaseAiAgent } from './base-ai.agent';
 
 @Injectable()
 export class FrontendMigrationAgent extends BaseAiAgent {
   readonly focusLabel = 'Frontend migration (React, TypeScript, legacy UI)';
 
-  protected readonly systemPrompt = `You are a frontend modernization specialist for LegacyUpgrader.
-Advise on React/Vue/Angular migrations, TypeScript adoption, jQuery removal, and UI architecture upgrades.
-Respond ONLY with valid JSON.`;
+  protected readonly systemPrompt = FRONTEND_MODERNIZATION_PROMPT.system;
 
   constructor(
     providerRegistry: AiProviderRegistry,
@@ -32,6 +31,7 @@ Respond ONLY with valid JSON.`;
       cache,
       rateLimiter,
       config.get('AI_CACHE_TTL_SECONDS', { infer: true }),
+      config.get('AI_MAX_TOKENS_PER_REQUEST', { infer: true }),
     );
   }
 }

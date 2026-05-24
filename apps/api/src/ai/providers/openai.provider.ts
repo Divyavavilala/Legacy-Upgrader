@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EnvConfig } from '../../config/env.validation';
 import type { AiCompletionRequest, AiCompletionResponse } from '../types/ai.types';
+import { fetchWithTimeout } from '../utils/ai-request.util';
 import type { AiProvider } from './ai-provider.interface';
 
 @Injectable()
@@ -11,11 +12,13 @@ export class OpenAiProvider implements AiProvider {
   private readonly apiKey?: string;
   private readonly model: string;
   private readonly baseUrl: string;
+  private readonly requestTimeoutMs: number;
 
   constructor(config: ConfigService<EnvConfig, true>) {
     this.apiKey = config.get('OPENAI_API_KEY', { infer: true });
     this.model = config.get('OPENAI_MODEL', { infer: true });
     this.baseUrl = config.get('OPENAI_BASE_URL', { infer: true });
+    this.requestTimeoutMs = config.get('AI_REQUEST_TIMEOUT_MS', { infer: true });
   }
 
   isConfigured(): boolean {
@@ -27,23 +30,27 @@ export class OpenAiProvider implements AiProvider {
       throw new Error('OpenAI API key is not configured');
     }
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
+    const response = await fetchWithTimeout(
+      `${this.baseUrl}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          temperature: request.temperature ?? 0.2,
+          max_tokens: request.maxTokens ?? 2048,
+          response_format: request.jsonMode ? { type: 'json_object' } : undefined,
+          messages: [
+            { role: 'system', content: request.systemPrompt },
+            { role: 'user', content: request.userPrompt },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model: this.model,
-        temperature: request.temperature ?? 0.2,
-        max_tokens: request.maxTokens ?? 2048,
-        response_format: request.jsonMode ? { type: 'json_object' } : undefined,
-        messages: [
-          { role: 'system', content: request.systemPrompt },
-          { role: 'user', content: request.userPrompt },
-        ],
-      }),
-    });
+      this.requestTimeoutMs,
+    );
 
     if (!response.ok) {
       const body = await response.text();

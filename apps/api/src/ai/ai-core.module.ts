@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { QueueModule } from '../queue';
+import { AiConfigModule } from './ai-config.module';
 import { AiHealthController } from './controllers/ai-health.controller';
 import { AiProviderRegistry } from './providers/ai-provider.registry';
 import { ClaudeProvider } from './providers/claude.provider';
@@ -15,7 +16,7 @@ import { RepositoryContextEngineService } from './services/repository-context-en
 
 /** Core AI services (no agents) — safe for HTTP/scan orchestration layers */
 @Module({
-  imports: [QueueModule],
+  imports: [AiConfigModule, QueueModule],
   controllers: [AiHealthController],
   providers: [
     OpenAiProvider,

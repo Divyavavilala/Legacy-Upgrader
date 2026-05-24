@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EnvConfig } from '../../config/env.validation';
 import type { AiCompletionRequest, AiCompletionResponse, AiProviderName } from '../types/ai.types';
+import { withRetry } from '../utils/ai-request.util';
 import type { AiProvider } from './ai-provider.interface';
 import { ClaudeProvider } from './claude.provider';
 import { GeminiProvider } from './gemini.provider';
@@ -15,6 +16,7 @@ export class AiProviderRegistry {
   private readonly providers = new Map<AiProviderName, AiProvider>();
   private readonly defaultProvider: AiProviderName;
   private readonly fallbackProvider: AiProviderName;
+  private readonly maxRetries: number;
 
   constructor(
     config: ConfigService<EnvConfig, true>,
@@ -32,6 +34,7 @@ export class AiProviderRegistry {
 
     this.defaultProvider = config.get('AI_DEFAULT_PROVIDER', { infer: true });
     this.fallbackProvider = config.get('AI_FALLBACK_PROVIDER', { infer: true });
+    this.maxRetries = config.get('AI_PROVIDER_MAX_RETRIES', { infer: true });
   }
 
   getProvider(name: AiProviderName): AiProvider {
@@ -82,7 +85,10 @@ export class AiProviderRegistry {
       if (!provider.isConfigured()) continue;
 
       try {
-        return await provider.complete(request);
+        return await withRetry(() => provider.complete(request), {
+          maxAttempts: this.maxRetries,
+          delayMs: 750,
+        });
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         this.logger.warn(`Provider ${name} failed: ${lastError.message}`);

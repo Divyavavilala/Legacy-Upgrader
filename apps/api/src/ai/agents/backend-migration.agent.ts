@@ -6,15 +6,14 @@ import { AiCacheService } from '../services/ai-cache.service';
 import { AiRateLimiterService } from '../services/ai-rate-limiter.service';
 import { AiTokenAccountingService } from '../services/ai-token-accounting.service';
 import { RepositoryContextEngineService } from '../services/repository-context-engine.service';
+import { BACKEND_MODERNIZATION_PROMPT } from '../prompts';
 import { BaseAiAgent } from './base-ai.agent';
 
 @Injectable()
 export class BackendMigrationAgent extends BaseAiAgent {
   readonly focusLabel = 'Backend migration (Java, Spring, Node, APIs)';
 
-  protected readonly systemPrompt = `You are a backend modernization specialist for LegacyUpgrader.
-Advise on Java/Spring Boot upgrades, Node/NestJS patterns, API versioning, and service decomposition.
-Respond ONLY with valid JSON.`;
+  protected readonly systemPrompt = BACKEND_MODERNIZATION_PROMPT.system;
 
   constructor(
     providerRegistry: AiProviderRegistry,
@@ -32,6 +31,7 @@ Respond ONLY with valid JSON.`;
       cache,
       rateLimiter,
       config.get('AI_CACHE_TTL_SECONDS', { infer: true }),
+      config.get('AI_MAX_TOKENS_PER_REQUEST', { infer: true }),
     );
   }
 }

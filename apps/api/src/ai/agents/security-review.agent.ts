@@ -6,16 +6,14 @@ import { AiCacheService } from '../services/ai-cache.service';
 import { AiRateLimiterService } from '../services/ai-rate-limiter.service';
 import { AiTokenAccountingService } from '../services/ai-token-accounting.service';
 import { RepositoryContextEngineService } from '../services/repository-context-engine.service';
+import { SECURITY_REVIEW_PROMPT } from '../prompts';
 import { BaseAiAgent } from './base-ai.agent';
 
 @Injectable()
 export class SecurityReviewAgent extends BaseAiAgent {
   readonly focusLabel = 'Security review and risk assessment';
 
-  protected readonly systemPrompt = `You are a security-focused modernization advisor for LegacyUpgrader.
-Analyze findings, dependency CVEs, and configuration for security risks, secrets exposure,
-authentication weaknesses, and supply-chain issues.
-Respond ONLY with valid JSON.`;
+  protected readonly systemPrompt = SECURITY_REVIEW_PROMPT.system;
 
   constructor(
     providerRegistry: AiProviderRegistry,
@@ -33,6 +31,7 @@ Respond ONLY with valid JSON.`;
       cache,
       rateLimiter,
       config.get('AI_CACHE_TTL_SECONDS', { infer: true }),
+      config.get('AI_MAX_TOKENS_PER_REQUEST', { infer: true }),
     );
   }
 }
