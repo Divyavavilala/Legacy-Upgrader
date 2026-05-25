@@ -67,4 +67,11 @@ export class RepositoriesController {
   listScans(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.scansService.listByRepository(id, user.organizationId);
   }
+
+  @Get(':id/latest-scan')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, UserRole.VIEWER)
+  @ApiOperation({ summary: 'Get the most recent scan with full modernization data' })
+  latestScan(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.scansService.getLatestScanForRepository(id, user.organizationId);
+  }
 }

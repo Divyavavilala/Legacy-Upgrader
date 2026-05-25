@@ -9,7 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../platform/quotas.service';
 import { UsageService } from '../platform/usage.service';
 import { PrismaService } from '../prisma';
-import { detectRepositoryProvider } from '../common/utils/detect-repository-provider';
+import { parseGitUrl } from '../common/utils/parse-git-url.util';
 import type { CreateRepositoryDto } from './dto';
 
 @Injectable()
@@ -25,16 +25,17 @@ export class RepositoriesService {
 
   async create(organizationId: string, dto: CreateRepositoryDto, userId?: string) {
     await this.quotasService.assertWithinQuota(organizationId, 'repositories');
+    const parsed = parseGitUrl(dto.gitUrl, dto.name);
 
     try {
       const repository = await this.prisma.repository.create({
         data: {
           organizationId,
-          name: dto.name.trim(),
-          slug: dto.slug.trim().toLowerCase(),
-          url: dto.gitUrl.trim(),
-          provider: detectRepositoryProvider(dto.gitUrl),
-          defaultBranch: dto.defaultBranch?.trim() ?? 'main',
+          name: parsed.name,
+          slug: parsed.slug,
+          url: parsed.normalizedUrl,
+          provider: parsed.provider,
+          defaultBranch: parsed.defaultBranch,
         },
       });
 
@@ -56,7 +57,7 @@ export class RepositoriesService {
         error.code === 'P2002'
       ) {
         throw new ConflictException(
-          `Repository slug "${dto.slug}" already exists in this organization`,
+          `Repository "${parsed.slug}" already exists in this organization`,
         );
       }
       throw error;
@@ -78,6 +79,9 @@ export class RepositoriesService {
             progress: true,
             createdAt: true,
             completedAt: true,
+            metadata: true,
+            errorMessage: true,
+            _count: { select: { findings: true } },
           },
         },
       },

@@ -1,4 +1,4 @@
-import { apiRequest, clearStoredTokens, persistTokens } from './client';
+import { apiDownload, apiRequest, clearStoredTokens, persistTokens } from './client';
 import type {
   AiReportResponse,
   ApiKeyScope,
@@ -125,12 +125,24 @@ export const api = {
     triggerScan: (id: string) =>
       apiRequest<ScanDetail>(`/repositories/${id}/scan`, { method: 'POST' }),
     listScans: (id: string) => apiRequest<ScanSummary[]>(`/repositories/${id}/scans`),
+    latestScan: (id: string) => apiRequest<ScanDetail | null>(`/repositories/${id}/latest-scan`),
   },
 
   scans: {
     get: (id: string) => apiRequest<ScanDetail>(`/scans/${id}`),
     progress: (id: string) => apiRequest<ScanProgress>(`/scans/${id}/progress`),
     aiReport: (id: string) => apiRequest<AiReportResponse>(`/scans/${id}/ai-report`),
+    retry: (id: string) => apiRequest<ScanDetail>(`/scans/${id}/retry`, { method: 'POST' }),
+    generatedOutput: (id: string) =>
+      apiRequest<{ files: import('./types').GeneratedOutputFile[]; count: number }>(
+        `/scans/${id}/generated-output`,
+      ),
+    downloadMarkdown: (id: string) =>
+      apiDownload(`/scans/${id}/report/markdown`, `modernization-report-${id.slice(0, 8)}.md`),
+    downloadPdf: (id: string) =>
+      apiDownload(`/scans/${id}/report/pdf`, `modernization-report-${id.slice(0, 8)}.pdf`),
+    downloadZip: (id: string) =>
+      apiDownload(`/scans/${id}/output.zip`, `modernized-output-${id.slice(0, 8)}.zip`),
   },
 
   health: () => apiRequest<{ status: string }>('/health', { skipAuth: true }),

@@ -160,3 +160,23 @@ export async function apiRequest<T>(
 
   throw lastError;
 }
+
+export async function apiDownload(path: string, filename: string): Promise<void> {
+  const token = await getValidAccessToken();
+  const url = path.startsWith('http') ? path : `${env.apiUrl}${path}`;
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    throw new ApiClientError(`Download failed (${response.status})`, response.status);
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(objectUrl);
+}

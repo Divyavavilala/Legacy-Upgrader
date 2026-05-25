@@ -12,6 +12,9 @@ import { PrismaService } from '../prisma';
 import { QueueService } from '../queue/queue.service';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.type';
 import type { ScanProgressResponse } from './interfaces/scan-progress.interface';
+import { ReportExportService } from './services/report-export.service';
+import type { GeneratedOutputFile } from './services/modernization-output.service';
+import { ZipExportService } from './services/zip-export.service';
 
 @Injectable()
 export class ScansService {
@@ -23,6 +26,8 @@ export class ScansService {
     private readonly quotasService: QuotasService,
     private readonly usageService: UsageService,
     private readonly auditService: AuditService,
+    private readonly reportExport: ReportExportService,
+    private readonly zipExport: ZipExportService,
   ) {}
 
   async triggerScan(repositoryId: string, user: AuthenticatedUser) {
@@ -118,8 +123,17 @@ export class ScansService {
       },
       include: {
         findings: { orderBy: [{ severity: 'desc' }, { createdAt: 'asc' }] },
+        dependencyIssues: { orderBy: [{ severity: 'desc' }] },
+        migrationRecommendations: { orderBy: [{ priority: 'desc' }] },
         repository: {
-          select: { id: true, name: true, slug: true, organizationId: true },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            url: true,
+            defaultBranch: true,
+            organizationId: true,
+          },
         },
         _count: { select: { findings: true, dependencyIssues: true } },
       },
@@ -129,7 +143,111 @@ export class ScansService {
       throw new NotFoundException('Scan not found');
     }
 
-    return scan;
+    const metrics = this.reportExport.computeMetrics(scan);
+    const meta =
+      scan.metadata && typeof scan.metadata === 'object'
+        ? (scan.metadata as Record<string, unknown>)
+        : {};
+
+    return {
+      ...scan,
+      metrics,
+      modernizedOutput: Array.isArray(meta.modernizedOutput)
+        ? meta.modernizedOutput
+        : [],
+    };
+  }
+
+  async retryScan(scanId: string, user: AuthenticatedUser) {
+    const scan = await this.prisma.scan.findFirst({
+      where: { id: scanId, repository: { organizationId: user.organizationId } },
+      select: { repositoryId: true, status: true },
+    });
+
+    if (!scan) {
+      throw new NotFoundException('Scan not found');
+    }
+
+    if (!['FAILED', 'CANCELLED', 'COMPLETED'].includes(scan.status)) {
+      throw new BadRequestException('Only completed or failed scans can be retried via a new scan');
+    }
+
+    return this.triggerScan(scan.repositoryId, user);
+  }
+
+  async getGeneratedOutput(scanId: string, organizationId: string) {
+    const scan = await this.findByIdForOrg(scanId, organizationId);
+    return {
+      files: (scan.modernizedOutput ?? []) as GeneratedOutputFile[],
+      count: (scan.modernizedOutput ?? []).length,
+    };
+  }
+
+  async getReportMarkdown(scanId: string, organizationId: string): Promise<string> {
+    return this.reportExport.buildMarkdownReport(scanId, organizationId);
+  }
+
+  async getReportPdf(scanId: string, organizationId: string): Promise<Buffer> {
+    const markdown = await this.reportExport.buildMarkdownReport(scanId, organizationId);
+    const scan = await this.prisma.scan.findFirst({
+      where: { id: scanId },
+      include: { repository: { select: { name: true } } },
+    });
+    return this.reportExport.buildPdfBuffer(
+      markdown,
+      `Modernization Report — ${scan?.repository.name ?? 'Repository'}`,
+    );
+  }
+
+  async getOutputZip(scanId: string, organizationId: string): Promise<Buffer> {
+    const { files } = await this.getGeneratedOutput(scanId, organizationId);
+    if (files.length === 0) {
+      throw new NotFoundException('No generated output for this scan');
+    }
+    return this.zipExport.createZipBuffer(files);
+  }
+
+  async getLatestScanForRepository(repositoryId: string, organizationId: string) {
+    await this.assertRepositoryInOrg(repositoryId, organizationId);
+
+    const scan = await this.prisma.scan.findFirst({
+      where: { repositoryId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        findings: { orderBy: [{ severity: 'desc' }, { createdAt: 'asc' }] },
+        dependencyIssues: { orderBy: [{ severity: 'desc' }] },
+        migrationRecommendations: { orderBy: [{ priority: 'desc' }] },
+        repository: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            url: true,
+            defaultBranch: true,
+            organizationId: true,
+          },
+        },
+        _count: { select: { findings: true, dependencyIssues: true } },
+      },
+    });
+
+    if (!scan) {
+      return null;
+    }
+
+    const meta =
+      scan.metadata && typeof scan.metadata === 'object'
+        ? (scan.metadata as Record<string, unknown>)
+        : {};
+    const metrics =
+      (meta.metrics as ReturnType<ReportExportService['computeMetrics']>) ??
+      this.reportExport.computeMetrics(scan);
+
+    return {
+      ...scan,
+      metrics,
+      modernizedOutput: Array.isArray(meta.modernizedOutput) ? meta.modernizedOutput : [],
+    };
   }
 
   async getAiReport(scanId: string, organizationId: string) {

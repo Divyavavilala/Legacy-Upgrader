@@ -11,12 +11,13 @@ interface ThemeState {
 
 function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle('dark', theme === 'dark');
+  document.documentElement.classList.toggle('light', theme === 'light');
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: 'light',
+      theme: 'dark',
       setTheme: (theme) => {
         applyTheme(theme);
         set({ theme });
@@ -31,6 +32,7 @@ export const useThemeStore = create<ThemeState>()(
       name: 'lu-theme',
       onRehydrateStorage: () => (state) => {
         if (state) applyTheme(state.theme);
+        else applyTheme('dark');
       },
     },
   ),

@@ -168,6 +168,9 @@ export interface Repository {
     progress: number;
     createdAt: string;
     completedAt: string | null;
+    errorMessage?: string | null;
+    metadata?: Record<string, unknown> | null;
+    _count?: { findings: number };
   }>;
 }
 
@@ -200,7 +203,18 @@ export interface Finding {
 
 export interface ScanDetail extends ScanSummary {
   findings: Finding[];
-  repository: { id: string; name: string; slug: string; organizationId: string };
+  dependencyIssues?: DependencyIssue[];
+  migrationRecommendations?: MigrationRecommendation[];
+  modernizedOutput?: GeneratedOutputFile[];
+  metrics?: ModernizationMetrics;
+  repository: {
+    id: string;
+    name: string;
+    slug: string;
+    url?: string | null;
+    defaultBranch?: string | null;
+    organizationId: string;
+  };
   _count: { findings: number; dependencyIssues: number };
   metadata?: Record<string, unknown> | null;
   errorMessage?: string | null;
@@ -249,10 +263,48 @@ export interface AiReportResponse {
 }
 
 export interface CreateRepositoryInput {
-  name: string;
-  slug: string;
   gitUrl: string;
-  defaultBranch?: string;
+  name?: string;
+}
+
+export interface ModernizationMetrics {
+  dependencyFreshness: number;
+  ciCdReadiness: number;
+  dockerReadiness: number;
+  typescriptAdoption: number;
+  deprecatedUsage: number;
+  architectureQuality: number;
+  securityScore: number;
+  testCoverageSignal: number;
+  overallReadiness: number;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+}
+
+export interface MigrationRecommendation {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  effort: string;
+  targetStack: string | null;
+  status: string;
+}
+
+export interface GeneratedOutputFile {
+  path: string;
+  content: string;
+  changeType: 'added' | 'modified';
+  description?: string;
+}
+
+export interface DependencyIssue {
+  id: string;
+  packageName: string;
+  currentVersion: string | null;
+  recommendedVersion: string | null;
+  severity: string;
+  ecosystem: string | null;
+  cveIds: string[];
 }
 
 export interface LoginInput {

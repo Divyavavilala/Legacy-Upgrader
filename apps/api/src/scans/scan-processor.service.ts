@@ -7,6 +7,10 @@ import { ScanProgressService } from '../analysis/pipeline/scan-progress.service'
 import { ScanCancelledError, ScanTimeoutError } from '../analysis/types/scan-analysis.types';
 import { WorkspaceManagerService } from '../analysis/workspace/workspace-manager.service';
 import type { EnvConfig } from '../config/env.validation';
+import type { Prisma } from '@prisma/client';
+import { ModernizationOutputService } from './services/modernization-output.service';
+import { ReportExportService } from './services/report-export.service';
+import { PrismaService } from '../prisma';
 
 @Injectable()
 export class ScanProcessorService {
@@ -19,6 +23,9 @@ export class ScanProcessorService {
     private readonly workspaceManager: WorkspaceManagerService,
     private readonly progressService: ScanProgressService,
     private readonly aiOrchestration: AiOrchestrationService,
+    private readonly modernizationOutput: ModernizationOutputService,
+    private readonly reportExport: ReportExportService,
+    private readonly prisma: PrismaService,
     config: ConfigService<EnvConfig, true>,
   ) {
     this.totalTimeoutMs = config.get('SCAN_TOTAL_TIMEOUT_MS', { infer: true });
@@ -38,12 +45,48 @@ export class ScanProcessorService {
       );
 
       const durationMs = Date.now() - started;
+      const modernizedOutput = this.modernizationOutput.generate(context);
+      const metrics = this.reportExport.computeMetrics({
+        findings: context.findings.map((f) => ({
+          severity: f.severity,
+          category: f.category,
+          ruleId: f.ruleId ?? null,
+        })),
+        dependencyIssues: context.dependencyIssues.map((d) => ({
+          severity: d.severity,
+        })),
+        metadata: { technologies: context.technologies },
+      });
+
+      const existing = await this.prisma.scan.findUnique({
+        where: { id: payload.scanId },
+        select: { metadata: true },
+      });
+      const prior =
+        existing?.metadata && typeof existing.metadata === 'object'
+          ? (existing.metadata as Record<string, unknown>)
+          : {};
+
+      await this.prisma.scan.update({
+        where: { id: payload.scanId },
+        data: {
+          metadata: {
+            ...prior,
+            technologies: context.technologies,
+            modernizedOutput,
+            metrics,
+            generatedFilesCount: modernizedOutput.length,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
 
       await this.progressService.markCompleted(payload.scanId, payload.repositoryId, {
         technologies: context.technologies,
+        metrics,
         findingsCount: context.findings.length,
         recommendationsCount: context.recommendations.length,
         dependencyIssuesCount: context.dependencyIssues.length,
+        generatedFilesCount: modernizedOutput.length,
         durationMs,
         cloneDurationMs: context.cloneDurationMs,
         commitSha: context.commitSha,

@@ -8,6 +8,7 @@ export const repositoryKeys = {
   all: ['repositories'] as const,
   detail: (id: string) => ['repositories', id] as const,
   scans: (id: string) => ['repositories', id, 'scans'] as const,
+  latestScan: (id: string) => ['repositories', id, 'latest-scan'] as const,
 };
 
 export function useRepositories() {
@@ -55,6 +56,7 @@ export function useTriggerScan(repositoryId: string) {
       void qc.invalidateQueries({ queryKey: repositoryKeys.all });
       void qc.invalidateQueries({ queryKey: repositoryKeys.detail(repositoryId) });
       void qc.invalidateQueries({ queryKey: repositoryKeys.scans(repositoryId) });
+      void qc.invalidateQueries({ queryKey: repositoryKeys.latestScan(repositoryId) });
       toast.success('Scan queued', { description: `Scan ${scan.id.slice(0, 8)}… started` });
     },
     onError: (e: Error) => {
@@ -62,3 +64,43 @@ export function useTriggerScan(repositoryId: string) {
     },
   });
 }
+
+export function useDeleteRepository() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.repositories.remove(id),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: repositoryKeys.all });
+      const previous = qc.getQueryData<import('@/api/types').Repository[]>(repositoryKeys.all);
+      qc.setQueryData(
+        repositoryKeys.all,
+        previous?.filter((r) => r.id !== id),
+      );
+      return { previous };
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.previous) qc.setQueryData(repositoryKeys.all, ctx.previous);
+      toast.error('Failed to delete repository');
+    },
+    onSuccess: () => {
+      toast.success('Repository deleted');
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: repositoryKeys.all });
+    },
+  });
+}
+
+export function useRepositoryLatestScan(repositoryId: string) {
+  return useQuery({
+    queryKey: repositoryKeys.latestScan(repositoryId),
+    queryFn: () => api.repositories.latestScan(repositoryId),
+    enabled: Boolean(repositoryId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status && ['PENDING', 'QUEUED', 'RUNNING'].includes(status)) return 2000;
+      return false;
+    },
+  });
+}
+

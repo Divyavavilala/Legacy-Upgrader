@@ -137,16 +137,33 @@ export class ScanProgressService {
 
   async markFailed(scanId: string, error: unknown, partialMetadata?: Record<string, unknown>): Promise<void> {
     const message = error instanceof Error ? error.message : 'Unknown scan failure';
+    const existing = await this.prisma.scan.findUnique({
+      where: { id: scanId },
+      select: { currentStage: true, metadata: true },
+    });
+    const prior =
+      existing?.metadata && typeof existing.metadata === 'object'
+        ? (existing.metadata as Record<string, unknown>)
+        : {};
+    const failedStage = existing?.currentStage ?? 'unknown';
+    const friendlyMessage = this.toFriendlyError(message, failedStage);
 
     await this.prisma.scan.update({
       where: { id: scanId },
       data: {
         status: ScanStatus.FAILED,
-        errorMessage: message,
+        errorMessage: friendlyMessage,
         completedAt: new Date(),
         metadata: {
+          ...prior,
           failed: true,
           error: message,
+          friendlyError: friendlyMessage,
+          failedStage,
+          failureLogs: [
+            ...(Array.isArray(prior.failureLogs) ? (prior.failureLogs as string[]) : []),
+            `[${failedStage}] ${message}`,
+          ],
           engine: 'legacy-analyzer-v1',
           ...partialMetadata,
         },
@@ -187,10 +204,33 @@ export class ScanProgressService {
         scan.repository.organizationId,
         scanId,
         scan.repository.name,
-        message,
+        friendlyMessage,
         scan.triggeredBy ?? undefined,
       );
     }
+  }
+
+  private toFriendlyError(message: string, stage: string): string {
+    const lower = message.toLowerCase();
+    if (lower.includes('branch') && lower.includes('not found')) {
+      return `Failed: branch not found — check the default branch for this repository`;
+    }
+    if (lower.includes('timeout') || lower.includes('timed out')) {
+      return `Failed: git clone timeout — repository may be too large or network is slow`;
+    }
+    if (lower.includes('authentication') || lower.includes('permission denied')) {
+      return `Failed: cannot access repository — verify URL is public or credentials are configured`;
+    }
+    if (lower.includes('not found') && lower.includes('repository')) {
+      return `Failed: repository not found — verify the Git URL is correct`;
+    }
+    if (stage === 'cloning') {
+      return `Failed during clone: ${message}`;
+    }
+    if (lower.includes('unsupported')) {
+      return `Failed: unsupported repository structure`;
+    }
+    return `Failed at ${stage.replace(/-/g, ' ')}: ${message}`;
   }
 
   async assertNotCancelled(scanId: string): Promise<void> {
