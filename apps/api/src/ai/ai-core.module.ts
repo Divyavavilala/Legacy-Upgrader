@@ -31,11 +31,13 @@ import { RepositoryContextEngineService } from './services/repository-context-en
     RepositoryContextEngineService,
     AiOrchestrationService,
   ],
-  exports: [
-    AiOrchestrationService,
-    AiProviderRegistry,
-    RepositoryContextEngineService,
-    AiTokenAccountingService,
-  ],
+ exports: [
+  AiOrchestrationService,
+  AiProviderRegistry,
+  RepositoryContextEngineService,
+  AiTokenAccountingService,
+  AiCacheService,
+  AiRateLimiterService,
+],
 })
 export class AiCoreModule {}

@@ -4,12 +4,14 @@ import { MetricsController } from './metrics.controller';
 import { MetricsInterceptor } from './metrics.interceptor';
 import { MetricsSyncService } from './metrics-sync.service';
 import { MetricsService } from './metrics.service';
+import { QueueModule } from '../queue';
 import { RequestContextMiddleware } from './request-context.middleware';
 import { StructuredLoggerService } from './structured-logger.service';
 import { StructuredLoggingInterceptor } from './structured-logging.interceptor';
 
 @Global()
 @Module({
+  imports: [QueueModule],
   controllers: [MetricsController],
   providers: [
     StructuredLoggerService,

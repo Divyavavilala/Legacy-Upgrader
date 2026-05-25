@@ -1,12 +1,10 @@
-import { getQueueToken } from '@nestjs/bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
 import {
   Inject,
   Injectable,
   Logger,
   OnApplicationShutdown,
-  OnModuleInit,
 } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import {
   ALL_QUEUE_NAMES,
   QUEUE_DEFAULT_JOB_OPTIONS,
@@ -20,31 +18,89 @@ import {
   type ReportGenerationJobPayload,
   type RepositoryScanJobPayload,
 } from '@legacyupgrader/queue-constants';
+
 import type { JobsOptions, Queue } from 'bullmq';
 import Redis from 'ioredis';
-import type { QueueDashboardHealth, SingleQueueHealth } from './interfaces/queue-health.interface';
+
+import type {
+  QueueDashboardHealth,
+  SingleQueueHealth,
+} from './interfaces/queue-health.interface';
+
 import { REDIS_CLIENT } from './redis.module';
 
 @Injectable()
-export class QueueService implements OnModuleInit, OnApplicationShutdown {
+export class QueueService implements OnApplicationShutdown {
   private readonly logger = new Logger(QueueService.name);
+
   private readonly queues = new Map<QueueName, Queue>();
 
   constructor(
-    private readonly moduleRef: ModuleRef,
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
-  ) {}
+    @InjectQueue(QUEUE_NAMES.REPOSITORY_SCAN)
+    private readonly repositoryScanQueue: Queue,
 
-  onModuleInit(): void {
-    for (const name of ALL_QUEUE_NAMES) {
-      const queue = this.moduleRef.get<Queue>(getQueueToken(name), { strict: false });
-      this.queues.set(name, queue);
-    }
+    @InjectQueue(QUEUE_NAMES.DEPENDENCY_ANALYSIS)
+    private readonly dependencyAnalysisQueue: Queue,
+
+    @InjectQueue(QUEUE_NAMES.AI_MODERNIZATION)
+    private readonly aiModernizationQueue: Queue,
+
+    @InjectQueue(QUEUE_NAMES.AI_SECURITY_REVIEW)
+    private readonly aiSecurityReviewQueue: Queue,
+
+    @InjectQueue(QUEUE_NAMES.AI_ARCHITECTURE_ANALYSIS)
+    private readonly aiArchitectureAnalysisQueue: Queue,
+
+    @InjectQueue(QUEUE_NAMES.REPORT_GENERATION)
+    private readonly reportGenerationQueue: Queue,
+
+    @Inject(REDIS_CLIENT)
+    private readonly redis: Redis,
+  ) {
+    this.queues.set(
+      QUEUE_NAMES.REPOSITORY_SCAN,
+      this.repositoryScanQueue,
+    );
+
+    this.queues.set(
+      QUEUE_NAMES.DEPENDENCY_ANALYSIS,
+      this.dependencyAnalysisQueue,
+    );
+
+    this.queues.set(
+      QUEUE_NAMES.AI_MODERNIZATION,
+      this.aiModernizationQueue,
+    );
+
+    this.queues.set(
+      QUEUE_NAMES.AI_SECURITY_REVIEW,
+      this.aiSecurityReviewQueue,
+    );
+
+    this.queues.set(
+      QUEUE_NAMES.AI_ARCHITECTURE_ANALYSIS,
+      this.aiArchitectureAnalysisQueue,
+    );
+
+    this.queues.set(
+      QUEUE_NAMES.REPORT_GENERATION,
+      this.reportGenerationQueue,
+    );
+
+    this.logger.log(
+      `Registered ${ALL_QUEUE_NAMES.length} BullMQ queues`,
+    );
   }
 
   async onApplicationShutdown(signal?: string): Promise<void> {
-    this.logger.log(`Closing queues (signal: ${signal ?? 'unknown'})…`);
-    await Promise.all([...this.queues.values()].map((queue) => queue.close()));
+    this.logger.log(
+      `Closing queues (signal: ${signal ?? 'unknown'})…`,
+    );
+
+    await Promise.all(
+      [...this.queues.values()].map((queue) => queue.close()),
+    );
+
     this.logger.log('All queues closed');
   }
 
@@ -52,42 +108,66 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     payload: RepositoryScanJobPayload,
     options?: JobsOptions,
   ): Promise<string> {
-    return this.enqueue(QUEUE_NAMES.REPOSITORY_SCAN, payload, options);
+    return this.enqueue(
+      QUEUE_NAMES.REPOSITORY_SCAN,
+      payload,
+      options,
+    );
   }
 
   async enqueueDependencyAnalysis(
     payload: DependencyAnalysisJobPayload,
     options?: JobsOptions,
   ): Promise<string> {
-    return this.enqueue(QUEUE_NAMES.DEPENDENCY_ANALYSIS, payload, options);
+    return this.enqueue(
+      QUEUE_NAMES.DEPENDENCY_ANALYSIS,
+      payload,
+      options,
+    );
   }
 
   async enqueueAiModernization(
     payload: AiModernizationJobPayload,
     options?: JobsOptions,
   ): Promise<string> {
-    return this.enqueue(QUEUE_NAMES.AI_MODERNIZATION, payload, options);
+    return this.enqueue(
+      QUEUE_NAMES.AI_MODERNIZATION,
+      payload,
+      options,
+    );
   }
 
   async enqueueAiSecurityReview(
     payload: AiSecurityReviewJobPayload,
     options?: JobsOptions,
   ): Promise<string> {
-    return this.enqueue(QUEUE_NAMES.AI_SECURITY_REVIEW, payload, options);
+    return this.enqueue(
+      QUEUE_NAMES.AI_SECURITY_REVIEW,
+      payload,
+      options,
+    );
   }
 
   async enqueueAiArchitectureAnalysis(
     payload: AiArchitectureAnalysisJobPayload,
     options?: JobsOptions,
   ): Promise<string> {
-    return this.enqueue(QUEUE_NAMES.AI_ARCHITECTURE_ANALYSIS, payload, options);
+    return this.enqueue(
+      QUEUE_NAMES.AI_ARCHITECTURE_ANALYSIS,
+      payload,
+      options,
+    );
   }
 
   async enqueueReportGeneration(
     payload: ReportGenerationJobPayload,
     options?: JobsOptions,
   ): Promise<string> {
-    return this.enqueue(QUEUE_NAMES.REPORT_GENERATION, payload, options);
+    return this.enqueue(
+      QUEUE_NAMES.REPORT_GENERATION,
+      payload,
+      options,
+    );
   }
 
   async enqueue<T extends QueueName>(
@@ -96,6 +176,7 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     options?: JobsOptions,
   ): Promise<string> {
     const queue = this.getQueue(queueName);
+
     const defaults = QUEUE_DEFAULT_JOB_OPTIONS[queueName];
 
     const job = await queue.add(queueName, payload, {
@@ -106,39 +187,64 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
       ...options,
     });
 
-    this.logger.debug(`Enqueued job ${job.id} on queue "${queueName}"`);
+    this.logger.debug(
+      `Enqueued job ${job.id} on queue "${queueName}"`,
+    );
+
     return job.id!;
   }
 
   getQueue(name: QueueName): Queue {
     const queue = this.queues.get(name);
+
     if (!queue) {
       throw new Error(`Queue "${name}" is not registered`);
     }
+
     return queue;
   }
 
   async getDashboardHealth(): Promise<QueueDashboardHealth> {
     const checkedAt = new Date().toISOString();
+
     const redis = await this.checkRedis();
 
     const queues: SingleQueueHealth[] = await Promise.all(
       ALL_QUEUE_NAMES.map((name: QueueName) =>
-  this.getQueueHealth(name),
-),
+        this.getQueueHealth(name),
+      ),
     );
 
-    const statuses = [redis.status, ...queues.map((q) => q.status)];
+    const statuses = [
+      redis.status,
+      ...queues.map((q) => q.status),
+    ];
+
     const status = this.aggregateStatus(statuses);
 
-    return { status, redis, queues, checkedAt };
+    return {
+      status,
+      redis,
+      queues,
+      checkedAt,
+    };
   }
 
-  private async getQueueHealth(name: QueueName): Promise<SingleQueueHealth> {
+  private async getQueueHealth(
+    name: QueueName,
+  ): Promise<SingleQueueHealth> {
     try {
       const queue = this.getQueue(name);
+
       const [counts, isPaused] = await Promise.all([
-        queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
+        queue.getJobCounts(
+          'waiting',
+          'active',
+          'completed',
+          'failed',
+          'delayed',
+          'paused',
+        ),
         queue.isPaused(),
       ]);
 
@@ -152,13 +258,27 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
       };
 
       const status =
-        isPaused || (queueCounts.failed > 0 && queueCounts.active === 0)
+        isPaused ||
+        (queueCounts.failed > 0 &&
+          queueCounts.active === 0)
           ? 'degraded'
           : 'healthy';
 
-      return { name, status, counts: queueCounts, isPaused };
+      return {
+        name,
+        status,
+        counts: queueCounts,
+        isPaused,
+      };
     } catch (error) {
-      this.logger.warn(`Health check failed for queue "${name}"`, error);
+      this.logger.warn(
+        `Health check failed for queue "${name}": ${
+          error instanceof Error
+            ? error.message
+            : String(error)
+        }`,
+      );
+
       return {
         name,
         status: 'unhealthy',
@@ -175,10 +295,14 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     }
   }
 
-  private async checkRedis(): Promise<QueueDashboardHealth['redis']> {
+  private async checkRedis(): Promise<
+    QueueDashboardHealth['redis']
+  > {
     const start = Date.now();
+
     try {
       const pong = await this.redis.ping();
+
       const latencyMs = Date.now() - start;
 
       if (pong !== 'PONG') {
@@ -189,18 +313,35 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
         };
       }
 
-      return { status: 'healthy', latencyMs };
+      return {
+        status: 'healthy',
+        latencyMs,
+      };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Redis unreachable';
-      return { status: 'unhealthy', latencyMs: null, message };
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Redis unreachable';
+
+      return {
+        status: 'unhealthy',
+        latencyMs: null,
+        message,
+      };
     }
   }
 
   private aggregateStatus(
     statuses: Array<'healthy' | 'degraded' | 'unhealthy'>,
   ): 'healthy' | 'degraded' | 'unhealthy' {
-    if (statuses.includes('unhealthy')) return 'unhealthy';
-    if (statuses.includes('degraded')) return 'degraded';
+    if (statuses.includes('unhealthy')) {
+      return 'unhealthy';
+    }
+
+    if (statuses.includes('degraded')) {
+      return 'degraded';
+    }
+
     return 'healthy';
   }
 }
